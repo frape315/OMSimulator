@@ -1098,7 +1098,6 @@ oms_status_enu_t oms2::FMICompositeModel::stepUntilVariableStep(ResultWriter& re
         fmi_status = fmi2_import_get_fmu_state(fmu_in, s ); // TODO: Add check for FMU_Status with error message ?
         fmi_import_vect.push_back(fmu_in);
         s_vect.push_back(s);
-
         // Do 1 step to stopTime = time for all FMUs
         it.second->doStep(time);
         states_bigstep.push_back(it.second->getStates());
@@ -1126,7 +1125,7 @@ oms_status_enu_t oms2::FMICompositeModel::stepUntilVariableStep(ResultWriter& re
           }
         }
       }
-        // call doStep, except for FMUs
+      // call doStep, except for FMUs
       for (const auto& it : subModels)
       {
         if (oms_component_fmu != it.second->getType())
