@@ -1137,7 +1137,6 @@ oms_status_enu_t oms2::FMICompositeModel::stepUntilVariableStep(ResultWriter& re
             foundStep = false;
             break;
           }
-
          }
          if(!foundStep)
           break; //Restart the loop with the new h.
