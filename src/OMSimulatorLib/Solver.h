@@ -72,6 +72,9 @@ namespace oms2
     oms_status_enu_t initializeSolver(double startTime);
     oms_status_enu_t freeSolver();
     oms_status_enu_t doStep(double stopTime);
+	std::vector<double*> getStates() {return states;}
+	std::vector<double*> getStatesDer() {return states_der;}
+	std::vector<double*> getStatesNominal() {return states_nominal;}
 
     double getTime() const {return time;}
     double getTolerance() const {return relativeTolerance;}
