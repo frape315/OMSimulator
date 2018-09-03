@@ -1090,27 +1090,27 @@ oms_status_enu_t oms2::FMICompositeModel::stepUntilVariableStep(ResultWriter& re
 	{
 		for (const auto& it : solvers)
 		{
-			foundStep = true; 
-			
+			foundStep = true;
+
 			// Get start States
 			states_start = it.second->getStates();
 			states_start_der = it.second->getStatesDer();
 			states_start_nominal = it.second->getStatesNominal();
-			
-			// Do 1 step to stopTime = time for all FMUs	   
-			it.second->doStep(time);					  
-			states_bigstep = it.second->getStates();	  
+
+			// Do 1 step to stopTime = time for all FMUs
+			it.second->doStep(time);
+			states_bigstep = it.second->getStates();
 			states_bigstep_der = it.second->getStatesDer();	 			 // Do we need this?
-			states_bigstep_nominal = it.second->getStatesNominal();	     // Do we need this?	  
-			it.second->setStates(states_start,states_start_der,states_start_nominal);	
-			
-			// Do 2 steps to stopTime = time but with a step in the middle 
-			it.second->doStep(halftime);   
-			it.second->doStep(time);	  	
-			states_smallstep = it.second->getStates();	
-			states_smallstep_der = it.second->getStatesDer();			 // Do we need this?	
-			states_smallstep_nominal = it.second->getStatesNominal();	 // Do we need this?		  
-		
+			states_bigstep_nominal = it.second->getStatesNominal();	     // Do we need this?
+			it.second->setStates(states_start,states_start_der,states_start_nominal);
+
+			// Do 2 steps to stopTime = time but with a step in the middle
+			it.second->doStep(halftime);
+			it.second->doStep(time);
+			states_smallstep = it.second->getStates();
+			states_smallstep_der = it.second->getStatesDer();			 // Do we need this?
+			states_smallstep_nominal = it.second->getStatesNominal();	 // Do we need this?
+
 			for (int i=0; i<states_bigstep.size(); ++i)
 			 {
          double small = *states_smallstep[i];
@@ -1119,33 +1119,33 @@ oms_status_enu_t oms2::FMICompositeModel::stepUntilVariableStep(ResultWriter& re
 					rel_est_error = (small-big)/small;  //Simple Error estimate to start. TODO: Fix better error estimate.
 				else
 					rel_est_error = (big-small)/big;  //Simple Error estimate to start. TODO: Fix better error estimate.
-				// Assume states_smallstep is more accurate 
+				// Assume states_smallstep is more accurate
 				if (rel_est_error > tolerance)
 				{
 					// Rollback and repeat last step.
-					it.second->setStates(states_start,states_start_der,states_start_nominal);	
-					time -= communicationInterval;			
+					it.second->setStates(states_start,states_start_der,states_start_nominal);
+					time -= communicationInterval;
 					communicationInterval = communicationInterval*tolerance/(rel_est_error*rescale_factor);
 					halftime = time+communicationInterval/2;
 					time += communicationInterval;
 					foundStep = false;
-					break; 
-				}			
+					break;
+				}
 			 }
 			 if(!foundStep)
 				break; //Restart the loop with the new h.
 		 }
 	 }
-		
+
     // call doStep, except for FMUs
     for (const auto& it : subModels)
       if (oms_component_fmu != it.second->getType())
 	  {
-		it.second->doStep(halftime); 
+		it.second->doStep(halftime);
         it.second->doStep(time);
 	  }
 
-	
+
     if (realtime_sync)
     {
       auto now = std::chrono::steady_clock::now();
@@ -1154,7 +1154,6 @@ oms_status_enu_t oms2::FMICompositeModel::stepUntilVariableStep(ResultWriter& re
       std::chrono::duration<double> margin = next - now;
       if (margin < std::chrono::duration<double>(0))
         logError(std::string("[oms2::FMICompositeModel::stepUntilVariableStep] real-time frame overrun, time=") + std::to_string(time) + std::string("s, exceeded margin=") + std::to_string(margin.count()) + std::string("s\n"));
-
       std::this_thread::sleep_until(next);
     }
 
@@ -1167,7 +1166,7 @@ oms_status_enu_t oms2::FMICompositeModel::stepUntilVariableStep(ResultWriter& re
       emit(resultWriter);
     }
     else
-      updateInputs(outputsGraph);	
+      updateInputs(outputsGraph);
   }
   return oms_status_ok;
 }
