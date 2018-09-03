@@ -1145,9 +1145,7 @@ oms_status_enu_t oms2::FMICompositeModel::stepUntilVariableStep(ResultWriter& re
         it.second->doStep(time);
 	  }
 
-<<<<<<< b83a9dbd0d36b44cd1b443dd64173aec14860600
 
-=======
     // call doStep for FMUs
     for (const auto& it : solvers)
 	{
@@ -1157,7 +1155,6 @@ oms_status_enu_t oms2::FMICompositeModel::stepUntilVariableStep(ResultWriter& re
       it.second->doStep(halftime);
 	  states_smallstep = it.second->getStates();
 	}
->>>>>>> added getStates in solver to make sure we can acess the current states in the composite model
     if (realtime_sync)
     {
       auto now = std::chrono::steady_clock::now();
