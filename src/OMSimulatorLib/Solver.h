@@ -74,7 +74,7 @@ namespace oms2
     oms_status_enu_t doStep(double stopTime);
 	std::vector<double*> getStates() {return states;}
 	std::vector<double*> getStatesDer() {return states_der;}
-	std::vector<double*> getStatesNominal() {return states_nominal;}	
+	std::vector<double*> getStatesNominal() {return states_nominal;}
 	oms_status_enu_t setStates(std::vector<double*> states_in, std::vector<double*> states_der_in, std::vector<double*> states_nominal_in);
 
     double getTime() const {return time;}
