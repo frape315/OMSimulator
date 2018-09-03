@@ -1081,7 +1081,7 @@ oms_status_enu_t oms2::FMICompositeModel::stepUntilVariableStep(ResultWriter& re
   {
 	logDebug("doStep: " + std::to_string(time) + " -> " + std::to_string(time+communicationInterval));
 	halftime = time+communicationInterval/2;
-    time += communicationInterval;
+  time += communicationInterval;
     if (time > stopTime)
       time = stopTime;
 
@@ -1145,7 +1145,6 @@ oms_status_enu_t oms2::FMICompositeModel::stepUntilVariableStep(ResultWriter& re
         it.second->doStep(time);
 	  }
 
-	
     if (realtime_sync)
     {
       auto now = std::chrono::steady_clock::now();
