@@ -958,6 +958,10 @@ oms_status_enu_t oms2::FMICompositeModel::stepUntil(ResultWriter& resultWriter, 
     logDebug("oms2::FMICompositeModel::stepUntil: Using master algorithm 'standard'");
     status = stepUntilStandard(resultWriter, stopTime, communicationInterval, loggingInterval, realtime_sync);
     break;
+  case MasterAlgorithm::VARIABLESTEP :
+    logDebug("oms2::FMICompositeModel::stepUntil: Using master algorithm 'variablestep'");
+    status = stepUntilVariableStep(resultWriter, stopTime, communicationInterval, loggingInterval, realtime_sync);
+	break;
 #if !defined(__arm__)
   case MasterAlgorithm::PCTPL :
     logDebug("oms2::FMICompositeModel::stepUntil: Using master algorithm 'pctpl'");
@@ -1067,8 +1071,58 @@ oms_status_enu_t oms2::FMICompositeModel::stepUntilStandard(ResultWriter& result
   return oms_status_ok;
 }
 
-#if !defined(__arm__)
+oms_status_enu_t oms2::FMICompositeModel::stepUntilVariableStep(ResultWriter& resultWriter, double stopTime, double communicationInterval, double loggingInterval, bool realtime_sync)
+{
+  logTrace();
+  auto start = std::chrono::steady_clock::now();
+  localInterval = communicationInterval;
+  while (time < stopTime)
+  {
+	/* TODO:: Add changing of localInterval HERE  
+	  Suggestion1: run BDF rank 2-4
+		- Question: How to access values from last 2-4 points
+	 */ 
+	logDebug("doStep: " + std::to_string(time) + " -> " + std::to_string(time+localInterval));
+    time += localInterval;
+    if (time > stopTime)
+      time = stopTime;
 
+    // call doStep, except for FMUs
+    for (const auto& it : subModels)
+      if (oms_component_fmu != it.second->getType())
+        it.second->doStep(time);
+
+    // call doStep for FMUs
+    for (const auto& it : solvers)
+      it.second->doStep(time);
+
+    if (realtime_sync)
+    {
+      auto now = std::chrono::steady_clock::now();
+      // seems a cast to a sufficient high resolution of time is necessary for avoiding truncation errors
+      auto next = start + std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::duration<double>(time));
+      std::chrono::duration<double> margin = next - now;
+      if (margin < std::chrono::duration<double>(0))
+        logError(std::string("[oms2::FMICompositeModel::stepUntilVariableStep] real-time frame overrun, time=") + std::to_string(time) + std::string("s, exceeded margin=") + std::to_string(margin.count()) + std::string("s\n"));
+
+      std::this_thread::sleep_until(next);
+    }
+
+    // input := output
+    if (loggingInterval >= 0.0 && time - tLastEmit >= loggingInterval)
+    {
+      if (loggingInterval <= 0.0)
+        emit(resultWriter);
+      updateInputs(outputsGraph);
+      emit(resultWriter);
+    }
+    else
+      updateInputs(outputsGraph);	
+  }
+  return oms_status_ok;
+}
+
+#if !defined(__arm__)
 /**
  * \brief Parallel "doStep(..)" execution using task pool CTPL library (https://github.com/vit-vit/CTPL).
  */
