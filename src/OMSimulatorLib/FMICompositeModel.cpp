@@ -1054,13 +1054,12 @@ oms_status_enu_t oms2::FMICompositeModel::stepUntilVariableStep(ResultWriter& re
   logTrace();
   auto start = std::chrono::steady_clock::now();
   localInterval = communicationInterval;
+  std::vector<double*> states_bigstep;
+  std::vector<double*> states_smallstep;
   while (time < stopTime)
   {
-	/* TODO:: Add changing of localInterval HERE  
-	  Suggestion1: run BDF rank 2-4
-		- Question: How to access values from last 2-4 points
-	 */ 
 	logDebug("doStep: " + std::to_string(time) + " -> " + std::to_string(time+localInterval));
+	halftime = time+localInterval/2;
     time += localInterval;
     if (time > stopTime)
       time = stopTime;
@@ -1072,8 +1071,13 @@ oms_status_enu_t oms2::FMICompositeModel::stepUntilVariableStep(ResultWriter& re
 
     // call doStep for FMUs
     for (const auto& it : solvers)
+	{
       it.second->doStep(time);
-
+	  states_bigstep = it.second->getStates();	  
+      it.second->doStep(halftime);  
+      it.second->doStep(halftime);	  
+	  states_smallstep = it.second->getStates();	
+	}
     if (realtime_sync)
     {
       auto now = std::chrono::steady_clock::now();
