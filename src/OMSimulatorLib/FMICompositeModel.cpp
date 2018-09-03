@@ -1078,6 +1078,7 @@ oms_status_enu_t oms2::FMICompositeModel::stepUntilVariableStep(ResultWriter& re
   localInterval = communicationInterval;
   std::vector<double*> states_bigstep;
   std::vector<double*> states_smallstep;
+  double rel_est_error; 
   while (time < stopTime)
   {
 	logDebug("doStep: " + std::to_string(time) + " -> " + std::to_string(time+localInterval));
@@ -1096,9 +1097,19 @@ oms_status_enu_t oms2::FMICompositeModel::stepUntilVariableStep(ResultWriter& re
 	{
       it.second->doStep(time);
 	  states_bigstep = it.second->getStates();	  
+	  // TODO: Rollback here
       it.second->doStep(halftime);  
       it.second->doStep(halftime);	  
 	  states_smallstep = it.second->getStates();	
+	  // TODO: Rollback 2x here
+	  rel_est_error = 0; 
+	  for (int i=0; i<states_bigstep.size(); ++i)
+	  {
+		  if (states_smallstep[i] > states_bigstep[i])
+			rel_est_error += (states_smallstep[i]-states_bigstep[i])/states_smallstep[i];
+		  else
+			rel_est_error += (states_bigstep[i]-states_smallstep[i])/states_bigstep[i];
+	  }
 	}
     if (realtime_sync)
     {
