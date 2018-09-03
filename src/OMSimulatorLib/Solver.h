@@ -79,6 +79,7 @@ namespace oms2
     double getTime() const {return time;}
     double getTolerance() const {return relativeTolerance;}
 
+
   private:
     void doEventIteration(int i);
 
