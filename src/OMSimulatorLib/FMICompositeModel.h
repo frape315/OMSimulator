@@ -141,6 +141,8 @@ namespace oms2
     oms_status_enu_t emit(oms3::ResultWriter& resultWriter);
 
 
+
+
     oms_status_enu_t stepUntilStandard(ResultWriter& resultWriter, double stopTime, double communicationInterval, double loggingInterval, bool realtime_sync);
     oms_status_enu_t stepUntilVariableStep(ResultWriter& resultWriter, double stopTime, double communicationInterval, double loggingInterval, bool realtime_sync);
 #if !defined(__arm__)
@@ -209,7 +211,6 @@ namespace oms2
     double est_error;
     double biggest_est_error = 0;
     double rescale_factor = 1.05;
-
 #if !defined(NO_TLM)
     std::vector<SignalRef> tlmSigRefs;
     std::map<std::string, std::vector<double> > tlmInitialValues;
