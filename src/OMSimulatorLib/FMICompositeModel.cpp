@@ -1147,23 +1147,23 @@ oms_status_enu_t oms2::FMICompositeModel::stepUntilVariableStep(ResultWriter& re
     }
 
     // call doStep, except for FMUs
-  for (const auto& it : subModels)
-    if (oms_component_fmu != it.second->getType())
-    {
-      it.second->doStep(halftime);
-      it.second->doStep(time);
-	  }
+    for (const auto& it : subModels)
+      if (oms_component_fmu != it.second->getType())
+      {
+        it.second->doStep(halftime);
+        it.second->doStep(time);
+      }
 
 
     // call doStep for FMUs
-  for (const auto& it : solvers)
-	{
-    it.second->doStep(time);
-	  states_bigstep = it.second->getStates();
-    it.second->doStep(halftime);
-    it.second->doStep(halftime);
-	  states_smallstep = it.second->getStates();
-	}
+    for (const auto& it : solvers)
+    {
+      it.second->doStep(time);
+      states_bigstep = it.second->getStates();
+      it.second->doStep(halftime);
+      it.second->doStep(halftime);
+      states_smallstep = it.second->getStates();
+    }
     if (realtime_sync)
     {
       auto now = std::chrono::steady_clock::now();
