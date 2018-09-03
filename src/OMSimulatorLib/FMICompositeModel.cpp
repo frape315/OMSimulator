@@ -1075,8 +1075,15 @@ oms_status_enu_t oms2::FMICompositeModel::stepUntilVariableStep(ResultWriter& re
 {
   logTrace();
   auto start = std::chrono::steady_clock::now();
+<<<<<<< 69c35ef5195dc29b471dfcc981f1e06f4143b355
   foundStep = false;
   mustRollback = true;
+=======
+  localInterval = communicationInterval;
+  std::vector<double*> states_bigstep;
+  std::vector<double*> states_smallstep;
+  double rel_est_error;
+>>>>>>> added some todos for rollbacks, and error calculation?
   while (time < stopTime)
   {
     logDebug("doStep: " + std::to_string(time) + " -> " + std::to_string(time+communicationInterval));
@@ -1176,7 +1183,6 @@ oms_status_enu_t oms2::FMICompositeModel::stepUntilVariableStep(ResultWriter& re
           mustRollback = false;
           it.second->setStates(states_start[i],states_start_der[i],states_start_nominal[i]);
           fmi_status = fmi2_import_set_fmu_state(fmi_import_vect[i], *s_vect[i]);
-
           for (int j=0; j<states_bigstep[i].size();j++)
           {
             // Rollback and repeat last step.
