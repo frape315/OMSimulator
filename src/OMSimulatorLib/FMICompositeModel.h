@@ -142,6 +142,8 @@ namespace oms2
 
 
 
+
+
     oms_status_enu_t stepUntilStandard(ResultWriter& resultWriter, double stopTime, double communicationInterval, double loggingInterval, bool realtime_sync);
     oms_status_enu_t stepUntilVariableStep(ResultWriter& resultWriter, double stopTime, double communicationInterval, double loggingInterval, bool realtime_sync);
 #if !defined(__arm__)
@@ -196,7 +198,6 @@ namespace oms2
     Clock clock;
     unsigned int clock_id;
     bool foundStep;
-<<<<<<< 90b886c4cad4dce6df5b9e68723ec9e8110eec6a
     std::vector<double*> states_start;
     std::vector<double*> states_start_der;
     std::vector<double*> states_start_nominal;
@@ -206,17 +207,6 @@ namespace oms2
     std::vector<double*> states_smallstep;
     std::vector<double*> states_smallstep_der;
     std::vector<double*> states_smallstep_nominal;
-=======
-    std::vector<double*> states_start; 
-    std::vector<double*> states_start_der; 
-    std::vector<double*> states_start_nominal; 
-    std::vector<double*> states_bigstep;   
-    std::vector<double*> states_bigstep_der;  
-    std::vector<double*> states_bigstep_nominal;  
-    std::vector<double*> states_smallstep; 
-    std::vector<double*> states_smallstep_der; 
-    std::vector<double*> states_smallstep_nominal; 
->>>>>>> new changes to FMIComposite and Solver, including setSTate function
     double rel_est_error;
     double rescale_factor = 1.05;
 
