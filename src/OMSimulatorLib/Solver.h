@@ -76,7 +76,6 @@ namespace oms2
     std::vector<double*> getStatesDer() {return states_der;}
     std::vector<double*> getStatesNominal() {return states_nominal;}
     oms_status_enu_t setStates(std::vector<double*> states_in, std::vector<double*> states_der_in, std::vector<double*> states_nominal_in);
-
     double getTime() const {return time;}
     double getTolerance() const {return relativeTolerance;}
 
