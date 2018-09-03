@@ -1148,7 +1148,8 @@ oms_status_enu_t oms2::FMICompositeModel::stepUntilVariableStep(ResultWriter& re
       {
         it.second->doStep(halftime);
         it.second->doStep(time);
-      }
+	  }
+
     if (realtime_sync)
     {
       auto now = std::chrono::steady_clock::now();
