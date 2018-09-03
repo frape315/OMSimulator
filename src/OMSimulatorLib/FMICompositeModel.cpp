@@ -1081,11 +1081,11 @@ oms_status_enu_t oms2::FMICompositeModel::stepUntilVariableStep(ResultWriter& re
   {
 	logDebug("doStep: " + std::to_string(time) + " -> " + std::to_string(time+communicationInterval));
 	halftime = time+communicationInterval/2;
-    time += communicationInterval;
-    if (time > stopTime)
-      time = stopTime;
+  time += communicationInterval;
+  if (time > stopTime)
+    time = stopTime;
 
-    // call doStep for FMUs
+  // call doStep for FMUs
 	while(!foundStep)
 	{
 		for (const auto& it : solvers)
