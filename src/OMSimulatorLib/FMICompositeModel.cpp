@@ -1147,7 +1147,6 @@ oms_status_enu_t oms2::FMICompositeModel::stepUntilVariableStep(ResultWriter& re
           states_bigstep_nominal.push_back(it.second->getStatesNominal());
           it.second->setStates(states_start.end(),states_start_der.end(),states_start_nominal.end());
           fmi_status = fmi2_import_set_fmu_state(fmu_in, *s);
-
           // Do 2 steps to stopTime = time but with a step in the middle
           it.second->doStep(halftime);
           it.second->doStep(time);
