@@ -1108,7 +1108,8 @@ oms_status_enu_t oms2::FMICompositeModel::stepUntilVariableStep(ResultWriter& re
 		  if (states_smallstep[i] > states_bigstep[i])
 			rel_est_error += (states_smallstep[i]-states_bigstep[i])/states_smallstep[i];
 		  else
-			rel_est_error += (states_bigstep[i]-states_smallstep[i])/states_bigstep[i];
+			rel_est_error += (states_bigstep[i]-states_smallstep[i])/states_smallstep[i];
+		// Assume states_smallstep is more accurate 
 	  }
 	}
     if (realtime_sync)
