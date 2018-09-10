@@ -1071,6 +1071,7 @@ oms_status_enu_t oms2::FMICompositeModel::stepUntilStandard(ResultWriter& result
   return oms_status_ok;
 }
 
+
 oms_status_enu_t oms2::FMICompositeModel::stepUntilVariableStep(ResultWriter& resultWriter, double stopTime, double communicationInterval, double loggingInterval, bool realtime_sync)
 {
   logTrace();
