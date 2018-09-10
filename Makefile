@@ -1,3 +1,8 @@
+
+CC ?= gcc
+CXX ?= g++
+LINK ?= $(CXX)
+
 RM=rm -rf
 CP=cp -rf
 MKDIR=mkdir -p
@@ -28,6 +33,7 @@ ifeq ($(detected_OS),Darwin)
 	OMSYSIDENT := OFF
 	export ABI := MAC64
 	FEXT=.dylib
+	CMAKE_FPIC=-DCMAKE_C_FLAGS="-fPIC"
 else ifeq (MINGW32,$(findstring MINGW32,$(detected_OS)))
 	BUILD_DIR := build/mingw
 	INSTALL_DIR := install/mingw
@@ -40,6 +46,9 @@ else ifeq (MINGW32,$(findstring MINGW32,$(detected_OS)))
 	export ABI := WINDOWS32
 	FEXT=.dll
 	EEXT=.exe
+	ifeq (clang,$(findstring clang,$(CC)))
+		DISABLE_SHARED = --disable-shared
+	endif
 else ifeq (MINGW,$(findstring MINGW,$(detected_OS)))
 	BUILD_DIR := build/mingw
 	INSTALL_DIR := install/mingw
@@ -51,6 +60,9 @@ else ifeq (MINGW,$(findstring MINGW,$(detected_OS)))
 	export ABI := WINDOWS64
 	FEXT=.dll
 	EEXT=.exe
+	ifeq (clang,$(findstring clang,$(CC)))
+		DISABLE_SHARED = --disable-shared
+	endif
 else
 	BUILD_DIR := build/linux
 	INSTALL_DIR := install/linux
@@ -62,6 +74,7 @@ else
 	export ABI := LINUX64
 endif
 	FEXT=.so
+	CMAKE_FPIC=-DCMAKE_C_FLAGS="-fPIC"
 endif
 
 # use cmake from above if is set, otherwise cmake
@@ -123,7 +136,7 @@ OMSimulator:
 	@echo LIBXML2: $(LIBXML2)
 	@echo "# make OMSimulator"
 	@echo
-	@$(MAKE) OMTLMSimulator
+	@$(MAKE) CC="$(CXX)" CXX="$(CXX)" OMTLMSimulator
 	@$(MAKE) OMSimulatorCore
 	test ! -z "$(DISABLE_RUN_OMSIMULATOR_VERSION)" || $(TOP_INSTALL_DIR)/bin/OMSimulator --version
 
@@ -141,7 +154,7 @@ OMTLMSimulator: RegEx
 	@echo "# make OMTLMSimulator"
 	@echo
 	@echo $(ABI)
-	@$(MAKE) -C OMTLMSimulator omtlmlib
+	$(MAKE) -C OMTLMSimulator omtlmlib
 	test ! `uname` != Darwin || $(MAKE) -C OMTLMSimulator/FMIWrapper install
 	@$(MKDIR) $(TOP_INSTALL_DIR)/lib/$(HOST_SHORT_OMC)
 	@$(MKDIR) $(TOP_INSTALL_DIR)/bin
@@ -172,7 +185,7 @@ OMTLMSimulatorClean:
 RegEx: 3rdParty/RegEx/OMSRegEx$(EEXT)
 3rdParty/RegEx/OMSRegEx$(EEXT): 3rdParty/RegEx/RegEx.h 3rdParty/RegEx/OMSRegEx.cpp
 	$(MAKE) -C 3rdParty/RegEx
-	
+
 config-3rdParty: config-fmil config-lua config-cvode config-kinsol config-ceres-solver config-libxml2
 
 config-OMSimulator: RegEx
@@ -207,7 +220,7 @@ config-cvode:
 	$(RM) 3rdParty/cvode/$(BUILD_DIR)
 	$(RM) 3rdParty/cvode/$(INSTALL_DIR)
 	$(MKDIR) 3rdParty/cvode/$(BUILD_DIR)
-	cd 3rdParty/cvode/$(BUILD_DIR) && $(CMAKE) $(CMAKE_TARGET) ../.. -DCMAKE_INSTALL_PREFIX=../../$(INSTALL_DIR) -DEXAMPLES_ENABLE:BOOL=0 -DBUILD_SHARED_LIBS:BOOL=0 -DCMAKE_C_FLAGS="-fPIC" && $(MAKE) install
+	cd 3rdParty/cvode/$(BUILD_DIR) && $(CMAKE) $(CMAKE_TARGET) ../.. -DCMAKE_INSTALL_PREFIX=../../$(INSTALL_DIR) -DEXAMPLES_ENABLE:BOOL=0 -DBUILD_SHARED_LIBS:BOOL=0 $(CMAKE_FPIC) && $(MAKE) install
 
 config-kinsol:
 	@echo
@@ -216,7 +229,7 @@ config-kinsol:
 	$(RM) 3rdParty/kinsol/$(BUILD_DIR)
 	$(RM) 3rdParty/kinsol/$(INSTALL_DIR)
 	$(MKDIR) 3rdParty/kinsol/$(BUILD_DIR)
-	cd 3rdParty/kinsol/$(BUILD_DIR) && $(CMAKE) $(CMAKE_TARGET) ../.. -DCMAKE_INSTALL_PREFIX=../../$(INSTALL_DIR) -DEXAMPLES_ENABLE:BOOL=0 -DBUILD_SHARED_LIBS:BOOL=0 -DCMAKE_C_FLAGS="-fPIC" && $(MAKE) install
+	cd 3rdParty/kinsol/$(BUILD_DIR) && $(CMAKE) $(CMAKE_TARGET) ../.. -DCMAKE_INSTALL_PREFIX=../../$(INSTALL_DIR) -DEXAMPLES_ENABLE:BOOL=0 -DBUILD_SHARED_LIBS:BOOL=0 $(CMAKE_FPIC) && $(MAKE) install
 
 config-gflags:
 	@echo
@@ -225,7 +238,7 @@ config-gflags:
 	$(RM) 3rdParty/gflags/$(BUILD_DIR)
 	$(RM) 3rdParty/gflags/$(INSTALL_DIR)
 	$(MKDIR) 3rdParty/gflags/$(BUILD_DIR)
-	cd 3rdParty/gflags/$(BUILD_DIR) && $(CMAKE) $(CMAKE_TARGET) ../../gflags -DCMAKE_INSTALL_PREFIX=../../$(INSTALL_DIR) -DBUILD_SHARED_LIBS:BOOL=OFF -DBUILD_TESTING:BOOL=OFF -DCMAKE_C_FLAGS="-fPIC" -DCMAKE_CXX_FLAGS="-fPIC" -DCMAKE_BUILD_TYPE="Release" && $(MAKE) install
+	cd 3rdParty/gflags/$(BUILD_DIR) && $(CMAKE) $(CMAKE_TARGET) ../../gflags -DCMAKE_INSTALL_PREFIX=../../$(INSTALL_DIR) -DBUILD_SHARED_LIBS:BOOL=OFF -DBUILD_TESTING:BOOL=OFF $(CMAKE_FPIC) -DCMAKE_CXX_FLAGS="-fPIC" -DCMAKE_BUILD_TYPE="Release" && $(MAKE) install
 
 config-glog: config-gflags
 	@echo
@@ -234,7 +247,7 @@ config-glog: config-gflags
 	$(RM) 3rdParty/glog/$(BUILD_DIR)
 	$(RM) 3rdParty/glog/$(INSTALL_DIR)
 	$(MKDIR) 3rdParty/glog/$(BUILD_DIR)
-	cd 3rdParty/glog/$(BUILD_DIR) && $(CMAKE) $(CMAKE_TARGET) ../../glog -DCMAKE_INSTALL_PREFIX=../../$(INSTALL_DIR) -DBUILD_SHARED_LIBS:BOOL=OFF -DBUILD_TESTING:BOOL=OFF -DCMAKE_C_FLAGS="-fPIC" -DCMAKE_CXX_FLAGS="-fPIC" -DCMAKE_BUILD_TYPE="Release" && $(MAKE) install
+	cd 3rdParty/glog/$(BUILD_DIR) && $(CMAKE) $(CMAKE_TARGET) ../../glog -DCMAKE_INSTALL_PREFIX=../../$(INSTALL_DIR) -DBUILD_SHARED_LIBS:BOOL=OFF -DBUILD_TESTING:BOOL=OFF $(CMAKE_FPIC) -DCMAKE_CXX_FLAGS="-fPIC" -DCMAKE_BUILD_TYPE="Release" && $(MAKE) install
 
 ifeq ($(CERES),OFF)
 config-ceres-solver:
@@ -263,7 +276,7 @@ config-libxml2:
 	@echo "# config libxml2"
 	@echo
 	$(MKDIR) 3rdParty/libxml2/$(INSTALL_DIR)
-	cd 3rdParty/libxml2 && ./autogen.sh --prefix="$(ROOT_DIR)/3rdParty/libxml2/$(INSTALL_DIR)" --without-python $(HOST_CROSS_TRIPLE) && $(MAKE) && $(MAKE) install
+	cd 3rdParty/libxml2 && $(FPIC) ./autogen.sh --prefix="$(ROOT_DIR)/3rdParty/libxml2/$(INSTALL_DIR)" $(DISABLE_SHARED) --without-python --without-zlib --without-lzma $(HOST_CROSS_TRIPLE) && $(MAKE) && $(MAKE) install
 endif
 
 distclean:
@@ -313,3 +326,8 @@ doc-doxygen:
 	@$(MAKE) -C doc/dev/OMSimulatorLib doc-doxygen
 	@$(CP) doc/dev/OMSimulatorLib/html/* $(INSTALL_DIR)/doc/OMSimulatorLib/
 	@$(MAKE) -C doc/dev/OMSimulatorLib clean
+
+gitclean:
+	git submodule foreach --recursive 'git clean -fdx'
+	git clean -fdx -e .project
+
