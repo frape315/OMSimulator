@@ -1057,7 +1057,7 @@ oms_status_enu_t oms2::FMICompositeModel::stepUntilStandard(ResultWriter& result
   return oms_status_ok;
 }
 
-<<<<<<< HEAD
+
 oms_status_enu_t oms2::FMICompositeModel::stepUntilVariableStep(ResultWriter& resultWriter, double stopTime, double communicationInterval, double loggingInterval, bool realtime_sync)
 {
   logTrace();
@@ -1127,7 +1127,6 @@ oms_status_enu_t oms2::FMICompositeModel::stepUntilVariableStep(ResultWriter& re
 
 =======
 #if !defined(__arm__)
->>>>>>> upstream/master
 
 /**
  * \brief Parallel "doStep(..)" execution using task pool CTPL library (https://github.com/vit-vit/CTPL).
