@@ -1101,7 +1101,7 @@ oms_status_enu_t oms2::FMICompositeModel::stepUntilVariableStep(ResultWriter& re
 			it.second->doStep(time);					  
 			states_bigstep = it.second->getStates();	  
 			states_bigstep_der = it.second->getStatesDer();	 			 // Do we need this?
-			states_bigstep_nominal = it.second->getStatesNominal();	     // Do we need this?	  
+			states_bigstep_nominal = it.second->getStatesNominal();	     // Do we need this?	
 			it.second->setStates(states_start,states_start_der,states_start_nominal);	
 			
 			// Do 2 steps to stopTime = time but with a step in the middle 
@@ -1144,7 +1144,6 @@ oms_status_enu_t oms2::FMICompositeModel::stepUntilVariableStep(ResultWriter& re
       it.second->doStep(halftime); 
       it.second->doStep(time);
 	  }
-
     if (realtime_sync)
     {
       auto now = std::chrono::steady_clock::now();
