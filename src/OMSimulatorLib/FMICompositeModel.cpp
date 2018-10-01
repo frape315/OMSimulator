@@ -1141,6 +1141,7 @@ oms_status_enu_t oms2::FMICompositeModel::stepUntilVariableStep(ResultWriter& re
 				break; //Restart the loop with the new h.
 		 }
 	 }
+
     // call doStep, except for FMUs
     for (const auto& it : subModels)
       if (oms_component_fmu != it.second->getType())
