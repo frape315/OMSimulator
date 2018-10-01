@@ -176,10 +176,23 @@ namespace oms2
     DirectedGraph outputsGraph;
 
     double time;
+	double halftime;
     double tolerance;
     double communicationInterval;
     double loggingInterval;
     double tLastEmit;
+	bool foundStep;
+	std::vector<double*> states_start; 
+	std::vector<double*> states_start_der; 
+	std::vector<double*> states_start_nominal; 
+	std::vector<double*> states_bigstep;   
+	std::vector<double*> states_bigstep_der;  
+	std::vector<double*> states_bigstep_nominal;  
+	std::vector<double*> states_smallstep; 
+	std::vector<double*> states_smallstep_der; 
+	std::vector<double*> states_smallstep_nominal; 
+	double rel_est_error;
+	double rescale_factor = 1.05;
 
 #if !defined(NO_TLM)
     std::vector<SignalRef> tlmSigRefs;
