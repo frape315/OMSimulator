@@ -1091,7 +1091,6 @@ oms_status_enu_t oms2::FMICompositeModel::stepUntilVariableStep(ResultWriter& re
 		for (const auto& it : solvers)
 		{
 			foundStep = true;
-
 			// Get start States
 			states_start = it.second->getStates();
 			states_start_der = it.second->getStatesDer();
@@ -1136,7 +1135,6 @@ oms_status_enu_t oms2::FMICompositeModel::stepUntilVariableStep(ResultWriter& re
 				break; //Restart the loop with the new h.
 		 }
 	 }
-
     // call doStep, except for FMUs
     for (const auto& it : subModels)
       if (oms_component_fmu != it.second->getType())
