@@ -1080,7 +1080,6 @@ oms_status_enu_t oms2::FMICompositeModel::stepUntilVariableStep(ResultWriter& re
   mustRollback = true;
   while (time < stopTime)
   {
-
     logDebug("doStep: " + std::to_string(time) + " -> " + std::to_string(time+communicationInterval));
     halftime = time+communicationInterval/2;
     time += communicationInterval;
