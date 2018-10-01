@@ -1115,6 +1115,7 @@ oms_status_enu_t oms2::FMICompositeModel::stepUntilVariableStep(ResultWriter& re
 			states_smallstep_der = it.second->getStatesDer();			 // Do we need this?
 			states_smallstep_nominal = it.second->getStatesNominal();	 // Do we need this?
 
+
 			for (int i=0; i<states_bigstep.size(); ++i)
 			 {
          double small = *states_smallstep[i];
@@ -1149,7 +1150,6 @@ oms_status_enu_t oms2::FMICompositeModel::stepUntilVariableStep(ResultWriter& re
       it.second->doStep(halftime);
       it.second->doStep(time);
 	  }
-
     if (realtime_sync)
     {
       auto now = std::chrono::steady_clock::now();
