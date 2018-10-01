@@ -215,6 +215,20 @@ oms_status_enu_t oms2::Solver::initializeFMU(oms2::FMUWrapper* fmu)
   return oms_status_ok;
 }
 
+oms_status_enu_t setStates(std::vector<double*> states_in, std::vector<double*> states_der_in, std::vector<double*> states_nominal_in)
+{
+	states = states_in;
+	states_der = states_der_in;
+	states_nominal = states_nominal_in;
+	
+	for (int j=0, k=0; j < fmus.size(); ++j)
+	{
+		fmistatus = fmi2_import_set_continuous_states(fmus[j]->getFMU(), states[j], nStates[j]);
+		if (fmi2_status_ok != fmistatus) logError("fmi2_import_set_continuous_states failed");
+	}
+	return oms_status_ok;
+}
+
 oms_status_enu_t oms2::Solver::initializeSolver(double startTime)
 {
   if (0 == fmus.size())

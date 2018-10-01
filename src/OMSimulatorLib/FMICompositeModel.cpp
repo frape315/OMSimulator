@@ -1076,43 +1076,74 @@ oms_status_enu_t oms2::FMICompositeModel::stepUntilVariableStep(ResultWriter& re
 {
   logTrace();
   auto start = std::chrono::steady_clock::now();
-  localInterval = communicationInterval;
-  std::vector<double*> states_bigstep;
-  std::vector<double*> states_smallstep;
-  double rel_est_error; 
+  foundStep = false;
   while (time < stopTime)
   {
-	logDebug("doStep: " + std::to_string(time) + " -> " + std::to_string(time+localInterval));
-	halftime = time+localInterval/2;
-    time += localInterval;
+	logDebug("doStep: " + std::to_string(time) + " -> " + std::to_string(time+communicationInterval));
+	halftime = time+communicationInterval/2;
+    time += communicationInterval;
     if (time > stopTime)
       time = stopTime;
 
+    // call doStep for FMUs
+	while(!foundStep)
+	{
+		for (const auto& it : solvers)
+		{
+			foundStep = true; 
+			
+			// Get start States
+			states_start = it.second->getStates();
+			states_start_der = it.second->getStatesDer();
+			states_start_nominal = it.second->getStatesNominal();
+			
+			// Do 1 step to stopTime = time for all FMUs	   
+			it.second->doStep(time);					  
+			states_bigstep = it.second->getStates();	  
+			states_bigstep_der = it.second->getStatesDer();	 			 // Do we need this?
+			states_bigstep_nominal = it.second->getStatesNomial();	     // Do we need this?	  
+			it.second->setStates(states_start,states_start_der,states_start_nominal);	
+			
+			// Do 2 steps to stopTime = time but with a step in the middle 
+			it.second->doStep(halftime);   
+			it.second->doStep(time);	  	
+			states_smallstep = it.second->getStates();	
+			states_smallstep_der = it.second->getStatesDer();			 // Do we need this?	
+			states_smallstep_nominal = it.second->getStatesNominal();	 // Do we need this?		  
+		
+			for (int i=0; i<states_bigstep.size(); ++i)
+			 {
+				if (states_smallstep[i] > states_bigstep[i])
+					rel_est_error = (states_smallstep[i]-states_bigstep[i])/states_smallstep[i];  //Simple Error estimate to start. TODO: Fix better error estimate.
+				else
+					rel_est_error = (states_bigstep[i]-states_smallstep[i])/states_smallstep[i];  //Simple Error estimate to start. TODO: Fix better error estimate.
+				// Assume states_smallstep is more accurate 
+				if (rel_est_error > tolerance)
+				{
+					// Rollback and repeat last step.
+					it.second->setStates(states_start,states_start_der,states_start_nominal);	
+					time -= communicationInterval;			
+					communicationInterval = communicationInterval*tol/(rel_est_error*rescale_factor);
+					halftime = time+communicationInterval/2;
+					time += communicationInterval;
+					foundStep = false;
+					break; 
+				}			
+			 }
+			 if(!foundStep)
+				break; //Restart the loop with the new h.
+		 }
+	 }
+		
     // call doStep, except for FMUs
     for (const auto& it : subModels)
       if (oms_component_fmu != it.second->getType())
-        it.second->doStep(time);
-
-    // call doStep for FMUs
-    for (const auto& it : solvers)
-	{
-      it.second->doStep(time);
-	  states_bigstep = it.second->getStates();	  
-	  // TODO: Rollback here
-      it.second->doStep(halftime);  
-      it.second->doStep(halftime);	  
-	  states_smallstep = it.second->getStates();	
-	  // TODO: Rollback 2x here
-	  rel_est_error = 0; 
-	  for (int i=0; i<states_bigstep.size(); ++i)
 	  {
-		  if (states_smallstep[i] > states_bigstep[i])
-			rel_est_error += (states_smallstep[i]-states_bigstep[i])/states_smallstep[i];
-		  else
-			rel_est_error += (states_bigstep[i]-states_smallstep[i])/states_smallstep[i];
-		// Assume states_smallstep is more accurate 
+		it.second->doStep(halftime); 
+        it.second->doStep(time);
 	  }
-	}
+
+	
     if (realtime_sync)
     {
       auto now = std::chrono::steady_clock::now();
