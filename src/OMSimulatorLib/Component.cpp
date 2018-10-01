@@ -29,32 +29,35 @@
  *
  */
 
-#ifndef _OMS2_SSD_TAGS_H_
-#define _OMS2_SSD_TAGS_H_
+#include "Component.h"
 
-namespace oms2
+#include "ssd/Tags.h"
+
+oms3::Component::Component(const ComRef& cref)
+  : element(oms_element_component, cref), cref(cref)
 {
-  namespace ssd
-  {
-    extern const char* ssd_annotation;
-    extern const char* ssd_annotations;
-    extern const char* ssd_annotation;
-    extern const char* ssd_component;
-    extern const char* ssd_connection_geometry;
-    extern const char* ssd_connection;
-    extern const char* ssd_connections;
-    extern const char* ssd_connector_geometry;
-    extern const char* ssd_connector;
-    extern const char* ssd_connectors;
-    extern const char* ssd_default_experiment;
-    extern const char* ssd_element_geometry;
-    extern const char* ssd_elements;
-    extern const char* ssd_enumerations;
-    extern const char* ssd_simulation_information;
-    extern const char* ssd_system_structure_description;
-    extern const char* ssd_system;
-    extern const char* ssd_units;
-  }
+  connectors.push_back(NULL);
+  element.setConnectors(&connectors[0]);
 }
 
-#endif
+oms3::Component::~Component()
+{
+  for (const auto& connector : connectors)
+    if (connector)
+      delete connector;
+}
+
+oms_status_enu_t oms3::Component::exportToSSD(pugi::xml_node& node) const
+{
+  node.append_attribute("name") = this->getName().c_str();
+  return oms_status_ok;
+}
+
+oms3::Connector *oms3::Component::getConnector(const oms3::ComRef &cref)
+{
+  for(auto &connector : connectors) {
+    if(connector && connector->getName() == cref)
+      return connector;
+  }
+  return NULL;
+}

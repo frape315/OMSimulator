@@ -32,21 +32,22 @@
 #ifndef _OMS2_FMI_COMPOSITE_MODEL_H_
 #define _OMS2_FMI_COMPOSITE_MODEL_H_
 
-#include "Types.h"
-#include "Pkg_oms2.h"
+#include "Clock.h"
 #include "CompositeModel.h"
 #include "ComRef.h"
 #include "Connection.h"
 #include "DirectedGraph.h"
 #include "FMISubModel.h"
+#include "Pkg_oms2.h"
 #include "SignalRef.h"
 #include "Solver.h"
-#include "Variable.h"
 #include "TLMInterface.h"
+#include "Types.h"
+#include "Variable.h"
 
+#include <atomic>
 #include <map>
 #include <vector>
-#include <atomic>
 
 #include <pugixml.hpp>
 
@@ -193,6 +194,8 @@ namespace oms2
 	std::vector<double*> states_smallstep_nominal; 
 	double rel_est_error;
 	double rescale_factor = 1.05;
+    Clock clock;
+    unsigned int clock_id;
 
 #if !defined(NO_TLM)
     std::vector<SignalRef> tlmSigRefs;

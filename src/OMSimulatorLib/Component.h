@@ -29,32 +29,40 @@
  *
  */
 
-#ifndef _OMS2_SSD_TAGS_H_
-#define _OMS2_SSD_TAGS_H_
+#ifndef _OMS_COMPONENT_H_
+#define _OMS_COMPONENT_H_
 
-namespace oms2
+#include "ComRef.h"
+#include "Types.h"
+#include "Element.h"
+#include <pugixml.hpp>
+
+namespace oms3
 {
-  namespace ssd
+  class Component
   {
-    extern const char* ssd_annotation;
-    extern const char* ssd_annotations;
-    extern const char* ssd_annotation;
-    extern const char* ssd_component;
-    extern const char* ssd_connection_geometry;
-    extern const char* ssd_connection;
-    extern const char* ssd_connections;
-    extern const char* ssd_connector_geometry;
-    extern const char* ssd_connector;
-    extern const char* ssd_connectors;
-    extern const char* ssd_default_experiment;
-    extern const char* ssd_element_geometry;
-    extern const char* ssd_elements;
-    extern const char* ssd_enumerations;
-    extern const char* ssd_simulation_information;
-    extern const char* ssd_system_structure_description;
-    extern const char* ssd_system;
-    extern const char* ssd_units;
-  }
+  public:
+    virtual ~Component();
+
+    const ComRef& getName() const {return cref;}
+    oms_status_enu_t exportToSSD(pugi::xml_node& node) const;
+    oms3::Element* getElement() {return &element;}
+    oms3::Connector *getConnector(const ComRef &cref);
+
+  protected:
+
+  protected:
+    Component(const ComRef& cref);
+
+    // stop the compiler generating methods copying the object
+    Component(Component const&);            ///< not implemented
+    Component& operator=(Component const&); ///< not implemented
+
+  private:
+    oms3::Element element;
+    oms3::ComRef cref;
+    std::vector<oms3::Connector*> connectors;
+  };
 }
 
 #endif

@@ -29,32 +29,37 @@
  *
  */
 
-#ifndef _OMS2_SSD_TAGS_H_
-#define _OMS2_SSD_TAGS_H_
+#ifndef _OMS_SYSTEM_WC_H_
+#define _OMS_SYSTEM_WC_H_
 
-namespace oms2
+#include "ComRef.h"
+#include "System.h"
+#include "Types.h"
+
+namespace oms3
 {
-  namespace ssd
+  class Model;
+
+  class SystemWC : public System
   {
-    extern const char* ssd_annotation;
-    extern const char* ssd_annotations;
-    extern const char* ssd_annotation;
-    extern const char* ssd_component;
-    extern const char* ssd_connection_geometry;
-    extern const char* ssd_connection;
-    extern const char* ssd_connections;
-    extern const char* ssd_connector_geometry;
-    extern const char* ssd_connector;
-    extern const char* ssd_connectors;
-    extern const char* ssd_default_experiment;
-    extern const char* ssd_element_geometry;
-    extern const char* ssd_elements;
-    extern const char* ssd_enumerations;
-    extern const char* ssd_simulation_information;
-    extern const char* ssd_system_structure_description;
-    extern const char* ssd_system;
-    extern const char* ssd_units;
-  }
+  public:
+    virtual ~SystemWC();
+
+    static System* NewSystem(const oms3::ComRef& cref, Model* parentModel, System* parentSystem);
+    oms_status_enu_t exportToSSD_SimulationInformation(pugi::xml_node& node) const;
+    oms_status_enu_t importFromSSD_SimulationInformation(const pugi::xml_node& node);
+
+  protected:
+    SystemWC(const ComRef& cref, Model* parentModel, System* parentSystem);
+
+    // stop the compiler generating methods copying the object
+    SystemWC(SystemWC const& copy);            ///< not implemented
+    SystemWC& operator=(SystemWC const& copy); ///< not implemented
+
+  private:
+    std::string solverName = "oms-ma";
+    double stepSize = 1e-1;
+  };
 }
 
 #endif

@@ -29,32 +29,30 @@
  *
  */
 
-#ifndef _OMS2_SSD_TAGS_H_
-#define _OMS2_SSD_TAGS_H_
+#ifndef _OMS3_FLAGS_H_
+#define _OMS3_FLAGS_H_
 
-namespace oms2
+namespace oms3
 {
-  namespace ssd
+  class Flags
   {
-    extern const char* ssd_annotation;
-    extern const char* ssd_annotations;
-    extern const char* ssd_annotation;
-    extern const char* ssd_component;
-    extern const char* ssd_connection_geometry;
-    extern const char* ssd_connection;
-    extern const char* ssd_connections;
-    extern const char* ssd_connector_geometry;
-    extern const char* ssd_connector;
-    extern const char* ssd_connectors;
-    extern const char* ssd_default_experiment;
-    extern const char* ssd_element_geometry;
-    extern const char* ssd_elements;
-    extern const char* ssd_enumerations;
-    extern const char* ssd_simulation_information;
-    extern const char* ssd_system_structure_description;
-    extern const char* ssd_system;
-    extern const char* ssd_units;
-  }
+  private:
+    Flags();
+    ~Flags();
+
+    // stop the compiler generating methods copying the object
+    Flags(Flags const&);            ///< not implemented
+    Flags& operator=(Flags const&); ///< not implemented
+
+    static Flags& GetInstance();
+
+  public:
+    static bool SuppressPath() {return GetInstance().suppressPath;}
+    static void SuppressPath(bool value) {GetInstance().suppressPath = value;}
+
+  private:
+    bool suppressPath;
+  };
 }
 
 #endif

@@ -29,32 +29,20 @@
  *
  */
 
-#ifndef _OMS2_SSD_TAGS_H_
-#define _OMS2_SSD_TAGS_H_
+#include "Flags.h"
 
-namespace oms2
+oms3::Flags::Flags()
+  : suppressPath(false)
 {
-  namespace ssd
-  {
-    extern const char* ssd_annotation;
-    extern const char* ssd_annotations;
-    extern const char* ssd_annotation;
-    extern const char* ssd_component;
-    extern const char* ssd_connection_geometry;
-    extern const char* ssd_connection;
-    extern const char* ssd_connections;
-    extern const char* ssd_connector_geometry;
-    extern const char* ssd_connector;
-    extern const char* ssd_connectors;
-    extern const char* ssd_default_experiment;
-    extern const char* ssd_element_geometry;
-    extern const char* ssd_elements;
-    extern const char* ssd_enumerations;
-    extern const char* ssd_simulation_information;
-    extern const char* ssd_system_structure_description;
-    extern const char* ssd_system;
-    extern const char* ssd_units;
-  }
 }
 
-#endif
+oms3::Flags::~Flags()
+{
+}
+
+oms3::Flags& oms3::Flags::GetInstance()
+{
+  // the only instance
+  static Flags flags;
+  return flags;
+}
