@@ -1084,7 +1084,6 @@ oms_status_enu_t oms2::FMICompositeModel::stepUntilVariableStep(ResultWriter& re
     time += communicationInterval;
     if (time > stopTime)
       time = stopTime;
-
     // call doStep for FMUs
     while(!foundStep)
     {
@@ -1145,27 +1144,10 @@ oms_status_enu_t oms2::FMICompositeModel::stepUntilVariableStep(ResultWriter& re
     // call doStep, except for FMUs
     for (const auto& it : subModels)
       if (oms_component_fmu != it.second->getType())
-<<<<<<< 79e2611a71e8f99f272c67fd53989b3331096d57
       {
         it.second->doStep(halftime);
         it.second->doStep(time);
       }
-    // call doStep for FMUs
-    for (const auto& it : solvers)
-    {
-      it.second->doStep(time);
-      states_bigstep = it.second->getStates();
-      it.second->doStep(halftime);
-      it.second->doStep(halftime);
-      states_smallstep = it.second->getStates();
-    }
-=======
-	  {
-      it.second->doStep(halftime); 
-      it.second->doStep(time);
-	  }
-
->>>>>>> added some comments and such to FMIComp, for the variabletimestep. Still WIP
     if (realtime_sync)
     {
       auto now = std::chrono::steady_clock::now();
