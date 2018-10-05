@@ -1121,6 +1121,7 @@ oms_status_enu_t oms2::FMICompositeModel::stepUntilVariableStep(ResultWriter& re
 				else
 					rel_est_error = (big-small)/big;  //Simple Error estimate to start. TODO: Fix better error estimate.
 				// Assume states_smallstep is more accurate
+
 				if (rel_est_error > tolerance)
 				{
 					// Rollback and repeat last step.
