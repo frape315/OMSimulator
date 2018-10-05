@@ -1091,12 +1091,10 @@ oms_status_enu_t oms2::FMICompositeModel::stepUntilVariableStep(ResultWriter& re
       for (const auto& it : solvers)
       {
         foundStep = true;
-
         // Get start States
         states_start = it.second->getStates();
         states_start_der = it.second->getStatesDer();
         states_start_nominal = it.second->getStatesNominal();
-
 
         fmi_status = fmi2_import_get_fmu_state(fmu_in, s );
 
