@@ -1172,7 +1172,6 @@ oms_status_enu_t oms2::FMICompositeModel::stepUntilVariableStep(ResultWriter& re
 
       std::this_thread::sleep_until(next);
     }
-
     // input := output
     if (loggingInterval >= 0.0 && time - tLastEmit >= loggingInterval)
     {
