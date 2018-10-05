@@ -1111,6 +1111,7 @@ oms_status_enu_t oms2::FMICompositeModel::stepUntilVariableStep(ResultWriter& re
 			states_smallstep_der = it.second->getStatesDer();			 // Do we need this?
 			states_smallstep_nominal = it.second->getStatesNominal();	 // Do we need this?
 
+
 			for (int i=0; i<states_bigstep.size(); ++i)
 			 {
          double small = *states_smallstep[i];
@@ -1123,6 +1124,7 @@ oms_status_enu_t oms2::FMICompositeModel::stepUntilVariableStep(ResultWriter& re
 				if (rel_est_error > tolerance)
 				{
 					// Rollback and repeat last step.
+
 					it.second->setStates(states_start,states_start_der,states_start_nominal);
 					time -= communicationInterval;
 					communicationInterval = communicationInterval*tolerance/(rel_est_error*rescale_factor);
