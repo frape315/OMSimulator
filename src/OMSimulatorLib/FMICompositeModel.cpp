@@ -1135,7 +1135,6 @@ oms_status_enu_t oms2::FMICompositeModel::stepUntilVariableStep(ResultWriter& re
           states_start.push_back(it.second->getStates());
           states_start_der.push_back(it.second->getStatesDer());
           states_start_nominal.push_back(it.second->getStatesNominal());
-
           fmi_status = fmi2_import_get_fmu_state(fmu_in, s );  // TODO: Add check for FMU_Status with error message ?
           fmi_import_vect.push_back(fmu_in);
           s_vect.push_back(s);                                 // TODO: make it a copy insead? not sure, pointer should be editing stuff?
