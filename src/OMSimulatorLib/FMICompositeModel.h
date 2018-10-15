@@ -182,6 +182,9 @@ namespace oms2
     double communicationInterval;
     double loggingInterval;
     double tLastEmit;
+    fmi2_status_t fmi_status;
+    fmi2_import_t* fmu_in;
+    fmi2_FMU_state_t* s;
     Clock clock;
     unsigned int clock_id;
     bool foundStep;
