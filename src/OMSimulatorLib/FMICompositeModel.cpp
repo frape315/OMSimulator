@@ -1096,13 +1096,17 @@ oms_status_enu_t oms2::FMICompositeModel::stepUntilVariableStep(ResultWriter& re
 			states_start = it.second->getStates();
 			states_start_der = it.second->getStatesDer();
 			states_start_nominal = it.second->getStatesNominal();
+      
+      fmi_status = fmi2_import_get_fmu_state(fmu_in, s );
 			
 			// Do 1 step to stopTime = time for all FMUs	   
 			it.second->doStep(time);					  
 			states_bigstep = it.second->getStates();	  
 			states_bigstep_der = it.second->getStatesDer();	 			 // Do we need this?
 			states_bigstep_nominal = it.second->getStatesNominal();	     // Do we need this?	  
+      
 			it.second->setStates(states_start,states_start_der,states_start_nominal);	
+      fmi_status = fmi2_import_set_fmu_state(fmu_in, *s);
 			
 			// Do 2 steps to stopTime = time but with a step in the middle 
 			it.second->doStep(halftime);   
@@ -1124,6 +1128,7 @@ oms_status_enu_t oms2::FMICompositeModel::stepUntilVariableStep(ResultWriter& re
 				{
 					// Rollback and repeat last step.
 					it.second->setStates(states_start,states_start_der,states_start_nominal);	
+          fmi_status = fmi2_import_set_fmu_state(fmu_in, *s);
 					time -= communicationInterval;			
 					communicationInterval = communicationInterval*tolerance/(rel_est_error*rescale_factor);
 					halftime = time+communicationInterval/2;
