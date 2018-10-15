@@ -1116,6 +1116,7 @@ oms_status_enu_t oms2::FMICompositeModel::stepUntilVariableStep(ResultWriter& re
 			states_smallstep_nominal = it.second->getStatesNominal();	 // Do we need this?
 
 
+
 			for (int i=0; i<states_bigstep.size(); ++i)
 			 {
          double small = *states_smallstep[i];
