@@ -1115,8 +1115,8 @@ oms_status_enu_t oms2::FMICompositeModel::stepUntilVariableStep(ResultWriter& re
 
         for (int i=0; i<states_bigstep.size(); ++i)
          {
-           double small = *states_smallstep[i];
-           double big = *states_bigstep[i];
+          double small = *states_smallstep[i];
+          double big = *states_bigstep[i];
           if (small > big)
             rel_est_error = (small-big)/small;  //Simple Error estimate to start. TODO: Fix better error estimate.
           else
