@@ -1086,6 +1086,7 @@ oms_status_enu_t oms2::FMICompositeModel::stepUntilVariableStep(ResultWriter& re
     if (time > stopTime)
       time = stopTime;
     // call doStep for FMUs
+
     while(!foundStep)
     {
       foundStep = true;
