@@ -190,6 +190,7 @@ namespace oms2
     Clock clock;
     unsigned int clock_id;
     bool mustRollback = false;
+    bool foundStep = false;
     std::vector<std::vector<double*>> states_start;
     std::vector<std::vector<double*>> states_start_der;
     std::vector<std::vector<double*>> states_start_nominal;

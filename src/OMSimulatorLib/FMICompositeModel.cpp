@@ -1080,73 +1080,32 @@ oms_status_enu_t oms2::FMICompositeModel::stepUntilVariableStep(ResultWriter& re
   mustRollback = true;
   while (time < stopTime)
   {
-	logDebug("doStep: " + std::to_string(time) + " -> " + std::to_string(time+communicationInterval));
-	halftime = time+communicationInterval/2;
-  time += communicationInterval;
+    logDebug("doStep: " + std::to_string(time) + " -> " + std::to_string(time+communicationInterval));
+    halftime = time+communicationInterval/2;
+    time += communicationInterval;
     if (time > stopTime)
       time = stopTime;
 
     // call doStep for FMUs
-	while(!foundStep)
-	{
-    foundStep = true;
-		for (const auto& it : solvers)
-		{
-			// Get start States
-			states_start.push_back(it.second->getStates());
-			states_start_der.push_back(it.second->getStatesDer());
-			states_start_nominal.push_back(it.second->getStatesNominal());
-
-      fmi_status = fmi2_import_get_fmu_state(fmu_in, s ); // TODO: Add check for FMU_Status with error message ?
-      fmi_import_vect.push_back(fmu_in);
-      s_vect.push_back(s);
-
-			// Do 1 step to stopTime = time for all FMUs
-			it.second->doStep(time);
-			states_bigstep.push_back(it.second->getStates());
-			states_bigstep_der.push_back(it.second->getStatesDer());	 			       // Do we need this?
-			states_bigstep_nominal.push_back(it.second->getStatesNominal());	     // Do we need this?
-			it.second->setStates(states_start.end(),states_start_der.end(),states_start_nominal.end());
-      fmi_status = fmi2_import_set_fmu_state(fmu_in, *s);
-
-			// Do 2 steps to stopTime = time but with a step in the middle
-			it.second->doStep(halftime);
-			it.second->doStep(time);
-			states_smallstep.push_back(it.second->getStates());
-			states_smallstep_der.push_back(it.second->getStatesDer());			     // Do we need this?
-			states_smallstep_nominal.push_back(it.second->getStatesNominal());	 // Do we need this?
-      for (j = 0; states_start[states_start.size()].size(); j++)
-      {
-        est_error = fabs(*states_smallstep[states_smallstep.size()][j]-*states_bigstep[states_bigstep.size()][j]);  //Simple Error estimate to start. TODO: Fix better error estimate.
-        if (est_error > tolerance)
-        {
-          if (biggest_est_error < est_error)
-          {
-            biggest_est_error = est_error;
-            mustRollback = true;
-          }
-        }
-      }
-		}
-      // call doStep, except for FMUs
-    for (const auto& it : subModels)
+    while(!foundStep)
     {
-      if (oms_component_fmu != it.second->getType())
+      foundStep = true;
+      for (const auto& it : solvers)
       {
         // Get start States
         states_start.push_back(it.second->getStates());
         states_start_der.push_back(it.second->getStatesDer());
         states_start_nominal.push_back(it.second->getStatesNominal());
 
-        fmi_status = fmi2_import_get_fmu_state(fmu_in, s );  // TODO: Add check for FMU_Status with error message ?
+        fmi_status = fmi2_import_get_fmu_state(fmu_in, s ); // TODO: Add check for FMU_Status with error message ?
         fmi_import_vect.push_back(fmu_in);
-        s_vect.push_back(s);                                 // TODO: make it a copy insead? not sure, pointer should be editing stuff?
+        s_vect.push_back(s);
 
         // Do 1 step to stopTime = time for all FMUs
         it.second->doStep(time);
         states_bigstep.push_back(it.second->getStates());
-        states_bigstep_der.push_back(it.second->getStatesDer());
-        states_bigstep_nominal.push_back(it.second->getStatesNominal());
+        states_bigstep_der.push_back(it.second->getStatesDer());	 			       // Do we need this?
+        states_bigstep_nominal.push_back(it.second->getStatesNominal());	     // Do we need this?
         it.second->setStates(states_start.end(),states_start_der.end(),states_start_nominal.end());
         fmi_status = fmi2_import_set_fmu_state(fmu_in, *s);
 
@@ -1154,10 +1113,8 @@ oms_status_enu_t oms2::FMICompositeModel::stepUntilVariableStep(ResultWriter& re
         it.second->doStep(halftime);
         it.second->doStep(time);
         states_smallstep.push_back(it.second->getStates());
-        states_smallstep_der.push_back(it.second->getStatesDer());
-        states_smallstep_nominal.push_back(it.second->getStatesNominal());
-        //double small = *states_smallstep[i][j];
-        //double big = *states_bigstep[i][j];
+        states_smallstep_der.push_back(it.second->getStatesDer());			     // Do we need this?
+        states_smallstep_nominal.push_back(it.second->getStatesNominal());	 // Do we need this?
         for (j = 0; states_start[states_start.size()].size(); j++)
         {
           est_error = fabs(*states_smallstep[states_smallstep.size()][j]-*states_bigstep[states_bigstep.size()][j]);  //Simple Error estimate to start. TODO: Fix better error estimate.
@@ -1171,27 +1128,71 @@ oms_status_enu_t oms2::FMICompositeModel::stepUntilVariableStep(ResultWriter& re
           }
         }
       }
-    }
-    if (mustRollback)
-    {
-      for (int i=0; i<states_bigstep.size(); ++i)
+        // call doStep, except for FMUs
+      for (const auto& it : subModels)
       {
-        mustRollback = false;
-        it.second->setStates(states_start[i],states_start_der[i],states_start_nominal[i]);
-        fmi_status = fmi2_import_set_fmu_state(fmi_import_vect[i], *s_vect[i]);
-
-        for (int j=0; j<states_bigstep[i].size();j++)
+        if (oms_component_fmu != it.second->getType())
         {
-          // Rollback and repeat last step.
+          // Get start States
+          states_start.push_back(it.second->getStates());
+          states_start_der.push_back(it.second->getStatesDer());
+          states_start_nominal.push_back(it.second->getStatesNominal());
+
+          fmi_status = fmi2_import_get_fmu_state(fmu_in, s );  // TODO: Add check for FMU_Status with error message ?
+          fmi_import_vect.push_back(fmu_in);
+          s_vect.push_back(s);                                 // TODO: make it a copy insead? not sure, pointer should be editing stuff?
+
+          // Do 1 step to stopTime = time for all FMUs
+          it.second->doStep(time);
+          states_bigstep.push_back(it.second->getStates());
+          states_bigstep_der.push_back(it.second->getStatesDer());
+          states_bigstep_nominal.push_back(it.second->getStatesNominal());
+          it.second->setStates(states_start.end(),states_start_der.end(),states_start_nominal.end());
+          fmi_status = fmi2_import_set_fmu_state(fmu_in, *s);
+
+          // Do 2 steps to stopTime = time but with a step in the middle
+          it.second->doStep(halftime);
+          it.second->doStep(time);
+          states_smallstep.push_back(it.second->getStates());
+          states_smallstep_der.push_back(it.second->getStatesDer());
+          states_smallstep_nominal.push_back(it.second->getStatesNominal());
+          //double small = *states_smallstep[i][j];
+          //double big = *states_bigstep[i][j];
+          for (j = 0; states_start[states_start.size()].size(); j++)
+          {
+            est_error = fabs(*states_smallstep[states_smallstep.size()][j]-*states_bigstep[states_bigstep.size()][j]);  //Simple Error estimate to start. TODO: Fix better error estimate.
+            if (est_error > tolerance)
+            {
+              if (biggest_est_error < est_error)
+              {
+                biggest_est_error = est_error;
+                mustRollback = true;
+              }
+            }
+          }
         }
       }
-        time -= communicationInterval;
-        communicationInterval = communicationInterval*tolerance/(biggest_est_error*rescale_factor);
-        halftime = time+communicationInterval/2;
-        time += communicationInterval;
-        foundStep = false;
+      if (mustRollback)
+      {
+        for (int i=0; i<states_bigstep.size(); ++i)
+        {
+          mustRollback = false;
+          it.second->setStates(states_start[i],states_start_der[i],states_start_nominal[i]);
+          fmi_status = fmi2_import_set_fmu_state(fmi_import_vect[i], *s_vect[i]);
+
+          for (int j=0; j<states_bigstep[i].size();j++)
+          {
+            // Rollback and repeat last step.
+          }
+        }
+          time -= communicationInterval;
+          communicationInterval = communicationInterval*tolerance/(biggest_est_error*rescale_factor);
+          halftime = time+communicationInterval/2;
+          time += communicationInterval;
+          foundStep = false;
+      }
     }
-  }
+
     if (realtime_sync)
     {
       auto now = std::chrono::steady_clock::now();
