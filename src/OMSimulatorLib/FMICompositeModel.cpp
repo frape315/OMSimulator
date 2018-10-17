@@ -1076,20 +1076,18 @@ oms_status_enu_t oms2::FMICompositeModel::stepUntilVariableStep(ResultWriter& re
 {
   logTrace();
   auto start = std::chrono::steady_clock::now();
-  foundStep = false;
   mustRollback = true;
   while (time < stopTime)
   {
-
     logDebug("doStep: " + std::to_string(time) + " -> " + std::to_string(time+communicationInterval));
     halftime = time+communicationInterval/2;
     time += communicationInterval;
     if (time > stopTime)
       time = stopTime;
-    // call doStep for FMUs
-    while(!foundStep)
+    while(mustRollback)
     {
-      foundStep = true;
+      mustRollback = false;
+      // call doStep for FMUs
       for (const auto& it : solvers)
       {
         // Get start States
@@ -1111,6 +1109,7 @@ oms_status_enu_t oms2::FMICompositeModel::stepUntilVariableStep(ResultWriter& re
         // Do 2 steps to stopTime = time but with a step in the middle
         it.second->doStep(halftime);
         it.second->doStep(time);
+
         states_smallstep.push_back(it.second->getStates());
         states_smallstep_der.push_back(it.second->getStatesDer());			     // Do we need this?
         states_smallstep_nominal.push_back(it.second->getStatesNominal());	 // Do we need this?
@@ -1130,12 +1129,14 @@ oms_status_enu_t oms2::FMICompositeModel::stepUntilVariableStep(ResultWriter& re
       // call doStep, except for FMUs
       for (const auto& it : subModels)
       {
+
         if (oms_component_fmu != it.second->getType())
         {
           // Get start States
           states_start.push_back(it.second->getStates());
           states_start_der.push_back(it.second->getStatesDer());
           states_start_nominal.push_back(it.second->getStatesNominal());
+
           fmi_status = fmi2_import_get_fmu_state(fmu_in, s );  // TODO: Add check for FMU_Status with error message ?
           fmi_import_vect.push_back(fmu_in);
           s_vect.push_back(s);                                 // TODO: make it a copy insead? not sure, pointer should be editing stuff?
@@ -1170,6 +1171,7 @@ oms_status_enu_t oms2::FMICompositeModel::stepUntilVariableStep(ResultWriter& re
           }
         }
       }
+      // If rollback, required, reset time variables and go back.
       if (mustRollback)
       {
         for (int i=0; i<states_bigstep.size(); ++i)
@@ -1177,6 +1179,7 @@ oms_status_enu_t oms2::FMICompositeModel::stepUntilVariableStep(ResultWriter& re
           mustRollback = false;
           it.second->setStates(states_start[i],states_start_der[i],states_start_nominal[i]);
           fmi_status = fmi2_import_set_fmu_state(fmi_import_vect[i], *s_vect[i]);
+
           for (int j=0; j<states_bigstep[i].size();j++)
           {
             // Rollback and repeat last step.

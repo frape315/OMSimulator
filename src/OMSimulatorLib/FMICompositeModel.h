@@ -196,7 +196,7 @@ namespace oms2
     fmi2_FMU_state_t* s;
     Clock clock;
     unsigned int clock_id;
-    bool mustRollback = false;
+    bool mustRollback = true;
     std::vector<std::vector<double*>> states_start;
     std::vector<std::vector<double*>> states_start_der;
     std::vector<std::vector<double*>> states_start_nominal;
