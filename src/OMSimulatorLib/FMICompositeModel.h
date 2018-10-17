@@ -182,22 +182,25 @@ namespace oms2
     double communicationInterval;
     double loggingInterval;
     double tLastEmit;
+    std::vector<fmi2_import_t*> fmi_import_vect;
+    std::vector<fmi2_FMU_state_t*> s_vect;
     fmi2_status_t fmi_status;
     fmi2_import_t* fmu_in;
     fmi2_FMU_state_t* s;
     Clock clock;
     unsigned int clock_id;
-    bool foundStep;
-    std::vector<double*> states_start; 
-    std::vector<double*> states_start_der; 
-    std::vector<double*> states_start_nominal; 
-    std::vector<double*> states_bigstep;   
-    std::vector<double*> states_bigstep_der;  
-    std::vector<double*> states_bigstep_nominal;  
-    std::vector<double*> states_smallstep; 
-    std::vector<double*> states_smallstep_der; 
-    std::vector<double*> states_smallstep_nominal; 
-    double rel_est_error;
+    bool mustRollback = false;
+    std::vector<std::vector<double*>> states_start;
+    std::vector<std::vector<double*>> states_start_der;
+    std::vector<std::vector<double*>> states_start_nominal;
+    std::vector<std::vector<double*>> states_bigstep;
+    std::vector<std::vector<double*>> states_bigstep_der;
+    std::vector<std::vector<double*>> states_bigstep_nominal;
+    std::vector<std::vector<double*>> states_smallstep;
+    std::vector<std::vector<double*>> states_smallstep_der;
+    std::vector<std::vector<double*>> states_smallstep_nominal;
+    double est_error;
+    double biggest_est_error = 0;
     double rescale_factor = 1.05;
 
 #if !defined(NO_TLM)
