@@ -1111,6 +1111,7 @@ oms_status_enu_t oms2::FMICompositeModel::stepUntilVariableStep(ResultWriter& re
         it.second->doStep(halftime);
         it.second->doStep(time);
 
+
         states_smallstep.push_back(it.second->getStates());
         states_smallstep_der.push_back(it.second->getStatesDer());			     // Do we need this?
         states_smallstep_nominal.push_back(it.second->getStatesNominal());	 // Do we need this?
@@ -1130,6 +1131,7 @@ oms_status_enu_t oms2::FMICompositeModel::stepUntilVariableStep(ResultWriter& re
       // call doStep, except for FMUs
       for (const auto& it : subModels)
       {
+
 
         if (oms_component_fmu != it.second->getType())
         {
