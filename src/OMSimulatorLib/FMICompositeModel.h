@@ -182,8 +182,8 @@ namespace oms2
     double communicationInterval;
     double loggingInterval;
     double tLastEmit;
-    std::vector<fmi2_import_t*> fmi_import_vect;
-    std::vector<fmi2_FMU_state_t*> s_vect;
+    std::vector<fmi2_import_t> fmi_import_vect;
+    std::vector<fmi2_FMU_state_t> s_vect;
     fmi2_status_t fmi_status;
     fmi2_import_t* fmu_in;
     fmi2_FMU_state_t* s;
