@@ -1115,7 +1115,7 @@ oms_status_enu_t oms2::FMICompositeModel::stepUntilVariableStep(ResultWriter& re
         states_smallstep.push_back(it.second->getStates());
         states_smallstep_der.push_back(it.second->getStatesDer());			     // Do we need this?
         states_smallstep_nominal.push_back(it.second->getStatesNominal());	 // Do we need this?
-        for (j = 0; states_start[states_start.size()].size(); j++)
+        for (int j = 0; states_start[states_start.size()].size(); j++)
         {
           est_error = fabs(*states_smallstep[states_smallstep.size()][j]-*states_bigstep[states_bigstep.size()][j]);  //Simple Error estimate to start. TODO: Fix better error estimate.
           if (est_error > tolerance)
