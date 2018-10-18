@@ -1103,7 +1103,7 @@ oms_status_enu_t oms2::FMICompositeModel::stepUntilVariableStep(ResultWriter& re
         states_bigstep.push_back(it.second->getStates());
         states_bigstep_der.push_back(it.second->getStatesDer());	 			       // Do we need this?
         states_bigstep_nominal.push_back(it.second->getStatesNominal());	     // Do we need this?
-        it.second->setStates(states_start.end(),states_start_der.end(),states_start_nominal.end());
+        it.second->setStates(states_start.back(),states_start_der.back(),states_start_nominal.back());
         fmi_status = fmi2_import_set_fmu_state(fmu_in, *s);
 
         // Do 2 steps to stopTime = time but with a step in the middle
@@ -1146,7 +1146,7 @@ oms_status_enu_t oms2::FMICompositeModel::stepUntilVariableStep(ResultWriter& re
           states_bigstep.push_back(it.second->getStates());
           states_bigstep_der.push_back(it.second->getStatesDer());
           states_bigstep_nominal.push_back(it.second->getStatesNominal());
-          it.second->setStates(states_start.end(),states_start_der.end(),states_start_nominal.end());
+          it.second->setStates(states_start.back(),states_start_der.back(),states_start_nominal.back());
           fmi_status = fmi2_import_set_fmu_state(&fmu_in, *s);
 
           // Do 2 steps to stopTime = time but with a step in the middle
