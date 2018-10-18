@@ -1095,8 +1095,8 @@ oms_status_enu_t oms2::FMICompositeModel::stepUntilVariableStep(ResultWriter& re
         states_start_der.push_back(it.second->getStatesDer());
         states_start_nominal.push_back(it.second->getStatesNominal());
         fmi_status = fmi2_import_get_fmu_state(fmu_in, s ); // TODO: Add check for FMU_Status with error message ?
-        fmi_import_vect.push_back(fmu_in);
-        s_vect.push_back(s);
+        fmi_import_vect.push_back(*fmu_in);
+        s_vect.push_back(*s);
 
         // Do 1 step to stopTime = time for all FMUs
         it.second->doStep(time);
@@ -1138,8 +1138,8 @@ oms_status_enu_t oms2::FMICompositeModel::stepUntilVariableStep(ResultWriter& re
           states_start_nominal.push_back(it.second->getStatesNominal());
 
           fmi_status = fmi2_import_get_fmu_state(fmu_in, s );  // TODO: Add check for FMU_Status with error message ?
-          fmi_import_vect.push_back(fmu_in);
-          s_vect.push_back(s);                                 // TODO: make it a copy insead? not sure, pointer should be editing stuff?
+          fmi_import_vect.push_back(*fmu_in);
+          s_vect.push_back(*s);                                 // TODO: make it a copy insead? not sure, pointer should be editing stuff?
 
           // Do 1 step to stopTime = time for all FMUs
           it.second->doStep(time);
@@ -1147,7 +1147,7 @@ oms_status_enu_t oms2::FMICompositeModel::stepUntilVariableStep(ResultWriter& re
           states_bigstep_der.push_back(it.second->getStatesDer());
           states_bigstep_nominal.push_back(it.second->getStatesNominal());
           it.second->setStates(states_start.end(),states_start_der.end(),states_start_nominal.end());
-          fmi_status = fmi2_import_set_fmu_state(fmu_in, *s);
+          fmi_status = fmi2_import_set_fmu_state(&fmu_in, *s);
 
           // Do 2 steps to stopTime = time but with a step in the middle
           it.second->doStep(halftime);
@@ -1176,20 +1176,13 @@ oms_status_enu_t oms2::FMICompositeModel::stepUntilVariableStep(ResultWriter& re
       {
         for (int i=0; i<states_bigstep.size(); ++i)
         {
-          mustRollback = false;
           it.second->setStates(states_start[i],states_start_der[i],states_start_nominal[i]);
-          fmi_status = fmi2_import_set_fmu_state(fmi_import_vect[i], *s_vect[i]);
-
-          for (int j=0; j<states_bigstep[i].size();j++)
-          {
-            // Rollback and repeat last step.
-          }
+          fmi_status = fmi2_import_set_fmu_state(&fmi_import_vect[i], s_vect[i]);
         }
-          time -= communicationInterval;
-          communicationInterval = communicationInterval*tolerance/(biggest_est_error*rescale_factor);
-          halftime = time+communicationInterval/2;
-          time += communicationInterval;
-          foundStep = false;
+        time -= communicationInterval;
+        communicationInterval = communicationInterval*tolerance/(biggest_est_error*rescale_factor);
+        halftime = time+communicationInterval/2;
+        time += communicationInterval;
       }
     }
     if (realtime_sync)
