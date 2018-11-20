@@ -1086,26 +1086,35 @@ oms_status_enu_t oms2::FMICompositeModel::stepUntilVariableStep(ResultWriter& re
       time = stopTime;
     while(mustRollback)
     {
+      fmuIndex = 0;
       mustRollback = false;
       // call doStep for FMUs
       for (const auto& it : solvers)
       {
+        fmus = it.second->getFmus();
         // Get start States
         states_start.push_back(it.second->getStates());
         states_start_der.push_back(it.second->getStatesDer());
         states_start_nominal.push_back(it.second->getStatesNominal());
-        fmi_status = fmi2_import_get_fmu_state(fmu_in, s ); // TODO: Add check for FMU_Status with error message ?
-        fmi_import_vect.push_back(*fmu_in);
-        s_vect.push_back(*s);
+
+        for (int i = 0; i < fmus.size(); i++)
+        {
+          fmu_in = fmus[i]->getFMU();
+          fmi_status = fmi2_import_get_fmu_state(fmu_in, s ); // TODO: Add check for FMU_Status with error message ?
+          fmi_import_vect.push_back(fmu_in);
+          s_vect.push_back(s);
+        }
 
         // Do 1 step to stopTime = time for all FMUs
         it.second->doStep(time);
         states_bigstep.push_back(it.second->getStates());
-        states_bigstep_der.push_back(it.second->getStatesDer());	 			       // Do we need this?
-        states_bigstep_nominal.push_back(it.second->getStatesNominal());	     // Do we need this?
+        states_bigstep_der.push_back(it.second->getStatesDer());
+        states_bigstep_nominal.push_back(it.second->getStatesNominal());
         it.second->setStates(states_start.back(),states_start_der.back(),states_start_nominal.back());
-        fmi_status = fmi2_import_set_fmu_state(fmu_in, *s);
-
+        for (int i = 0; i < fmus.size(); i++)
+        {
+          fmi_status = fmi2_import_set_fmu_state(fmi_import_vect[fmi_import_vect.size()-i-1], *s_vect[s_vect.size()-i-1]); // Iterate through backwards, thats fine right?
+        }
         // Do 2 steps to stopTime = time but with a step in the middle
         it.second->doStep(halftime);
         it.second->doStep(time);
@@ -1113,6 +1122,7 @@ oms_status_enu_t oms2::FMICompositeModel::stepUntilVariableStep(ResultWriter& re
         states_smallstep.push_back(it.second->getStates());
         states_smallstep_der.push_back(it.second->getStatesDer());			     // Do we need this?
         states_smallstep_nominal.push_back(it.second->getStatesNominal());	 // Do we need this?
+        fmuIndex++;
         for (int j = 0; j < states_start[states_start.size()].size(); j++)
         {
           est_error = fabs(*states_smallstep[states_smallstep.size()][j]-*states_bigstep[states_bigstep.size()][j]);  //Simple Error estimate to start. TODO: Fix better error estimate.
@@ -1129,37 +1139,42 @@ oms_status_enu_t oms2::FMICompositeModel::stepUntilVariableStep(ResultWriter& re
       // call doStep, except for FMUs
       for (const auto& it : subModels)
       {
-
-        if (oms_component_fmu != it.second->getType())
+        if (oms_component_fmu_old != it.second->getType())
         {
-          // Get start States
-          states_start.push_back(it.second->getStates());
-          states_start_der.push_back(it.second->getStatesDer());
-          states_start_nominal.push_back(it.second->getStatesNominal());
 
+          fmuwrap = (oms2::FMUWrapper*) it.second;
+          fmu_in = fmuwrap->getFMU();
+          // Get start States
           fmi_status = fmi2_import_get_fmu_state(fmu_in, s );  // TODO: Add check for FMU_Status with error message ?
-          fmi_import_vect.push_back(*fmu_in);
-          s_vect.push_back(*s);                                 // TODO: make it a copy insead? not sure, pointer should be editing stuff?
+          fmi_import_vect.push_back(fmu_in);
+          s_vect.push_back(s);                                 // TODO: make it a copy insead? not sure, pointer should be editing stuff?
+          numStates[fmuIndex] = fmi2_import_get_number_of_continuous_states(fmu_in);
+          fmi_status = fmi2_import_get_continuous_states(fmu_in, states_start[states_start.size()][0], numStates[fmuIndex]);
+          fmi_status = fmi2_import_get_derivatives(fmu_in, states_start_der[states_start_der.size()][0], numStates[fmuIndex]);
+          fmi_status = fmi2_import_get_nominals_of_continuous_states(fmu_in, states_start_nominal[states_start_nominal.size()][0], numStates[fmuIndex]);
+
+
 
           // Do 1 step to stopTime = time for all FMUs
           it.second->doStep(time);
-          states_bigstep.push_back(it.second->getStates());
-          states_bigstep_der.push_back(it.second->getStatesDer());
-          states_bigstep_nominal.push_back(it.second->getStatesNominal());
-          it.second->setStates(states_start.back(),states_start_der.back(),states_start_nominal.back());
-          fmi_status = fmi2_import_set_fmu_state(&fmu_in, *s);
+          fmi_status = fmi2_import_get_fmu_state(fmu_in, s );
+          fmi_status = fmi2_import_get_continuous_states(fmu_in, states_bigstep[states_bigstep.size()][0], numStates[fmuIndex]);
+          fmi_status = fmi2_import_get_derivatives(fmu_in, states_bigstep_der[states_bigstep_der.size()][0], numStates[fmuIndex]);
+          fmi_status = fmi2_import_get_nominals_of_continuous_states(fmu_in, states_bigstep_nominal[states_bigstep_nominal.size()][0], numStates[fmuIndex]);
+          fmi_status = fmi2_import_set_fmu_state(fmi_import_vect.back(), *s_vect.back());
 
           // Do 2 steps to stopTime = time but with a step in the middle
           it.second->doStep(halftime);
           it.second->doStep(time);
-          states_smallstep.push_back(it.second->getStates());
-          states_smallstep_der.push_back(it.second->getStatesDer());
-          states_smallstep_nominal.push_back(it.second->getStatesNominal());
-          //double small = *states_smallstep[i][j];
-          //double big = *states_bigstep[i][j];
-          for (int j = 0; j < states_start[states_start.size()].size(); j++)
+          fmi_status = fmi2_import_get_fmu_state(fmu_in, s );
+          fmi_status = fmi2_import_get_continuous_states(fmu_in, states_smallstep[states_smallstep.size()][0], numStates[fmuIndex]);
+          fmi_status = fmi2_import_get_derivatives(fmu_in, states_smallstep_der[states_smallstep_der.size()][0], numStates[fmuIndex]);
+          fmi_status = fmi2_import_get_nominals_of_continuous_states(fmu_in, states_smallstep_nominal[states_smallstep_nominal.size()][0], numStates[fmuIndex]);
+
+          fmuIndex++;
+          for (int j = 0; j < numStates[fmuIndex]; j++)
           {
-            est_error = fabs(*states_smallstep[states_smallstep.size()][j]-*states_bigstep[states_bigstep.size()][j]);  //Simple Error estimate to start. TODO: Fix better error estimate.
+            est_error = 0;  // Obviously not working, add error from s, not sure how to acess variables in s.
             if (est_error > tolerance)
             {
               if (biggest_est_error < est_error)
@@ -1174,10 +1189,15 @@ oms_status_enu_t oms2::FMICompositeModel::stepUntilVariableStep(ResultWriter& re
       // If rollback, required, reset time variables and go back.
       if (mustRollback)
       {
-        for (int i=0; i<states_bigstep.size(); ++i)
+        fmuIndex = 0;
+        for (const auto& it : solvers)
         {
-          it.second->setStates(states_start[i],states_start_der[i],states_start_nominal[i]);
-          fmi_status = fmi2_import_set_fmu_state(&fmi_import_vect[i], s_vect[i]);
+          it.second->setStates(states_start[fmuIndex],states_start_der[fmuIndex],states_start_nominal[fmuIndex]);
+          fmuIndex++;
+        }
+        for (int i=0; i<fmi_import_vect.size(); ++i)
+        {
+          fmi_status = fmi2_import_set_fmu_state(fmi_import_vect[i], *s_vect[i]);
         }
         time -= communicationInterval;
         communicationInterval = communicationInterval*tolerance/(biggest_est_error*rescale_factor);
