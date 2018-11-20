@@ -213,6 +213,7 @@ namespace oms2
     double est_error;
     double biggest_est_error = 0;
     double rescale_factor = 1.05;
+
 #if !defined(NO_TLM)
     std::vector<SignalRef> tlmSigRefs;
     std::map<std::string, std::vector<double> > tlmInitialValues;

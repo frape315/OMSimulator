@@ -1215,6 +1215,7 @@ oms_status_enu_t oms2::FMICompositeModel::stepUntilVariableStep(ResultWriter& re
         logError(std::string("[oms2::FMICompositeModel::stepUntilVariableStep] real-time frame overrun, time=") + std::to_string(time) + std::string("s, exceeded margin=") + std::to_string(margin.count()) + std::string("s\n"));
       std::this_thread::sleep_until(next);
     }
+
     // input := output
     if (loggingInterval >= 0.0 && time - tLastEmit >= loggingInterval)
     {
