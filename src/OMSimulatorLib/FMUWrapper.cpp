@@ -469,7 +469,7 @@ oms_status_enu_t oms2::FMUWrapper::enterInitialization(const double startTime)
 oms_status_enu_t oms2::FMUWrapper::exitInitialization()
 {
   fmi2_status_t fmistatus;
-
+  
   // check if a solver instance is assigned to this FMU
   if (!solver)
     return logError("[oms2::FMUWrapper::exitInitialization] No solver assigned to FMU \"" + getName() + "\"");
@@ -481,18 +481,19 @@ oms_status_enu_t oms2::FMUWrapper::exitInitialization()
       return logError("[oms2::FMUWrapper::exitInitialization] FMU \"" + getName() + "\" doesn't provide any internal solver (no co-simulation)");
   }
   else
-  {
+  {        
     // initialize me-simulation
     if (oms_fmi_kind_me != fmuInfo.getKind() && oms_fmi_kind_me_and_cs != fmuInfo.getKind())
       return logError("[oms2::FMUWrapper::exitInitialization] FMU \"" + getName() + "\" doesn't provide me-simulation functionality");
   }
-
   fmistatus = fmi2_import_exit_initialization_mode(fmu);
   if (fmi2_status_ok != fmistatus) return logError("fmi2_import_exit_initialization_mode failed");
-
+  
+  logDebug("DEBUGGING: stopped inside solver->initalize if this is the last debug message.");
   solver->initializeFMU(this);
-
+  
   initialized = true;
+  
   return oms_status_ok;
 }
 

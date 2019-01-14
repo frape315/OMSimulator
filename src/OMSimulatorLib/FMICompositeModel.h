@@ -141,10 +141,10 @@ namespace oms2
     oms_status_enu_t emit(oms3::ResultWriter& resultWriter);
 
 
-    oms_status_enu_t stepUntilStandard(ResultWriter& resultWriter, double stopTime, double communicationInterval, double loggingInterval, bool realtime_sync);
-    oms_status_enu_t stepUntilVariableStep(ResultWriter& resultWriter, double stopTime, double communicationInterval, double loggingInterval, bool realtime_sync);
+    oms_status_enu_t stepUntilStandard(oms3::ResultWriter& resultWriter, double stopTime, double communicationInterval, double loggingInterval, bool realtime_sync);
+    oms_status_enu_t stepUntilVariableStep(oms3::ResultWriter& resultWriter, double stopTime, double communicationInterval, double loggingInterval, bool realtime_sync);
 #if !defined(__arm__)
-    oms_status_enu_t stepUntilPCTPL(ResultWriter& resultWriter, double stopTime, double communicationInterval, double loggingInterval, bool realtime_sync);
+    oms_status_enu_t stepUntilPCTPL(oms3::ResultWriter& resultWriter, double stopTime, double communicationInterval, double loggingInterval, bool realtime_sync);
 #endif // if !defined(__arm__)
     oms_status_enu_t updateDependencyGraphs();
 
@@ -189,18 +189,28 @@ namespace oms2
     double communicationInterval;
     double loggingInterval;
     double tLastEmit;
+    double temp_value;
     std::vector<fmi2_import_t*> fmi_import_vect;
-    std::vector<fmi2_FMU_state_t*> s_vect;
+    std::vector<fmi2_FMU_state_t> s_vect;
     fmi2_status_t fmi_status;
     fmi2_import_t* fmu_in;
-    fmi2_FMU_state_t* s;
+    fmi2_FMU_state_t s = NULL;
     oms2::FMUWrapper* fmuwrap;
     int fmuIndex;
     Clock clock;
     unsigned int clock_id;
     bool mustRollback = true;
+    oms_solver_enu_t solverMethod_comp;
     std::vector<size_t> numStates;
     std::vector<oms2::FMUWrapper*> fmus;
+    std::vector<oms2::Variable> allVariables;
+    std::vector<oms2::Variable> noneParameterVariables;
+    std::vector<double> VariablesSave;
+    std::vector<double> VariablesLargeStep;
+    std::vector<double> VariablesSmallStep;
+    std::map<std::string, oms3::Option<double>> realParameters;
+    std::map<std::string, oms3::Option<int>> integerParameters;
+    std::map<std::string, oms3::Option<bool>> booleanParameters;
     std::vector<std::vector<double*>> states_start;
     std::vector<std::vector<double*>> states_start_der;
     std::vector<std::vector<double*>> states_start_nominal;
@@ -211,8 +221,9 @@ namespace oms2
     std::vector<std::vector<double*>> states_smallstep_der;
     std::vector<std::vector<double*>> states_smallstep_nominal;
     double est_error;
-    double biggest_est_error = 0;
-    double rescale_factor = 1.05;
+    double biggest_est_error;
+    double safety_factor = 0.95;
+    double actualCommunicationInterval;
 
 #if !defined(NO_TLM)
     std::vector<SignalRef> tlmSigRefs;

@@ -65,6 +65,7 @@ namespace oms2
     const oms2::ComRef& getName() const {return name;}
     oms_status_enu_t setTolerance(double tolerance) {this->relativeTolerance = tolerance; return oms_status_ok;}
     oms_status_enu_t setTime(double time) {this->time = time; return oms_status_ok;}
+    oms_status_enu_t setFmuTime(double time,int index) {this->fmuTime[index] = time; return oms_status_ok;}
     oms_status_enu_t addFMU(oms2::FMUWrapper* fmu);
     oms_status_enu_t removeFMU(const oms2::ComRef& fmu);
     oms_solver_enu_t getMethod() const {return solverMethod;}

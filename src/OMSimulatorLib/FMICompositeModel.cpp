@@ -881,6 +881,7 @@ oms_status_enu_t oms2::FMICompositeModel::initialize(double startTime, double to
   this->time = startTime;
   this->tolerance = tolerance;
   this->tLastEmit = startTime;
+  this->biggest_est_error = tolerance/2;
 
   // check if there is a solver instance assigned to each FMU
   for (const auto& it : subModels)
@@ -916,12 +917,15 @@ oms_status_enu_t oms2::FMICompositeModel::initialize(double startTime, double to
     readFromTLMSockets(time);
 #endif
   updateInputs(initialUnknownsGraph);
+  
 
   // Exit initialization
   for (const auto& it : subModels)
     if (oms_status_ok != it.second->exitInitialization())
       return logError("[oms2::FMICompositeModel::initialize] failed");
 
+
+  logDebug("DEBUGGING: Initializing solvers");
   // Initialize solvers
   for (const auto& it : solvers)
     it.second->initializeSolver(startTime);
@@ -929,7 +933,7 @@ oms_status_enu_t oms2::FMICompositeModel::initialize(double startTime, double to
   updateInputs(outputsGraph);
 
   clock.reset();
-
+  
   return oms_status_ok;
 }
 
@@ -1072,109 +1076,175 @@ oms_status_enu_t oms2::FMICompositeModel::stepUntilStandard(oms3::ResultWriter& 
 }
 
 
-oms_status_enu_t oms2::FMICompositeModel::stepUntilVariableStep(ResultWriter& resultWriter, double stopTime, double communicationInterval, double loggingInterval, bool realtime_sync)
+oms_status_enu_t oms2::FMICompositeModel::stepUntilVariableStep(oms3::ResultWriter& resultWriter, double stopTime, double communicationInterval, double loggingInterval, bool realtime_sync)
 {
   logTrace();
   auto start = std::chrono::steady_clock::now();
-  mustRollback = true;
   while (time < stopTime)
   {
-    logDebug("doStep: " + std::to_string(time) + " -> " + std::to_string(time+communicationInterval));
+    mustRollback = true;
+    
     halftime = time+communicationInterval/2;
     time += communicationInterval;
     if (time > stopTime)
+    {
+      actualCommunicationInterval = stopTime-time+communicationInterval;
+      halftime = stopTime-actualCommunicationInterval/2;
       time = stopTime;
-    while(mustRollback)
+    }  
+    else
+      actualCommunicationInterval = communicationInterval;
+    logDebug("doStep: " + std::to_string(time-actualCommunicationInterval) + " ----> " + std::to_string(time));
+    
+    while(mustRollback && time <= stopTime)
     {
       fmuIndex = 0;
       mustRollback = false;
       // call doStep for FMUs
+      logDebug("DEBUGGING: Just before the for loops start");
       for (const auto& it : solvers)
       {
-        fmus = it.second->getFmus();
-        // Get start States
-        states_start.push_back(it.second->getStates());
-        states_start_der.push_back(it.second->getStatesDer());
-        states_start_nominal.push_back(it.second->getStatesNominal());
-
-        for (int i = 0; i < fmus.size(); i++)
+        logDebug("DEBUGGING: Solver loop");
+        solverMethod_comp = it.second->getMethod();
+        if (solverMethod_comp == oms_solver_internal) // If CS
         {
-          fmu_in = fmus[i]->getFMU();
-          fmi_status = fmi2_import_get_fmu_state(fmu_in, s ); // TODO: Add check for FMU_Status with error message ?
-          fmi_import_vect.push_back(fmu_in);
-          s_vect.push_back(s);
-        }
-
-        // Do 1 step to stopTime = time for all FMUs
-        it.second->doStep(time);
-        states_bigstep.push_back(it.second->getStates());
-        states_bigstep_der.push_back(it.second->getStatesDer());
-        states_bigstep_nominal.push_back(it.second->getStatesNominal());
-        it.second->setStates(states_start.back(),states_start_der.back(),states_start_nominal.back());
-        for (int i = 0; i < fmus.size(); i++)
-        {
-          fmi_status = fmi2_import_set_fmu_state(fmi_import_vect[fmi_import_vect.size()-i-1], *s_vect[s_vect.size()-i-1]); // Iterate through backwards, thats fine right?
-        }
-        // Do 2 steps to stopTime = time but with a step in the middle
-        it.second->doStep(halftime);
-        it.second->doStep(time);
-
-        states_smallstep.push_back(it.second->getStates());
-        states_smallstep_der.push_back(it.second->getStatesDer());			     // Do we need this?
-        states_smallstep_nominal.push_back(it.second->getStatesNominal());	 // Do we need this?
-        fmuIndex++;
-        for (int j = 0; j < states_start[states_start.size()].size(); j++)
-        {
-          est_error = fabs(*states_smallstep[states_smallstep.size()][j]-*states_bigstep[states_bigstep.size()][j]);  //Simple Error estimate to start. TODO: Fix better error estimate.
-          if (est_error > tolerance)
+          fmus = it.second->getFmus(); // Get FMUs in the solver
+          logDebug("DEBUGGING: Entering CS Loop, there are :" + std::to_string(fmus.size())+" CS fmu(s) in this solver");
+          
+          //fmuwrap = (oms2::FMUWrapper*) it.second;          
+          
+          logDebug("DEBUGGING: Starting loop over all fmus in this solver");
+          
+          for (int i = 0; i < fmus.size(); i++)
           {
-            if (biggest_est_error < est_error)
+            fmu_in = fmus[i]->getFMU();
+            logDebug("DEBUGGING: get the fmu state next"); 
+            s = NULL;
+            fmi_status = fmi2_import_get_fmu_state(fmu_in,&s);
+            if (fmi2_status_ok != fmi_status) logError("fmi2_import_get_fmu_state failed");            
+            logDebug("DEBUGGING: We just finished getting the fmu_state"); 
+            s_vect.push_back(s);
+            fmi_import_vect.push_back(fmu_in);
+              
+            allVariables = fmus[i]->getAllVariables();
+            logDebug("DEBUGGING: The FMU has: "+std::to_string(allVariables.size())+" variables."); 
+
+            for (int j = 0; j < allVariables.size(); j++)
             {
-              biggest_est_error = est_error;
-              mustRollback = true;
+              if(!allVariables[j].isParameter())
+              {
+                noneParameterVariables.push_back(allVariables[j]);
+                fmus[i]->getReal(allVariables[j].getSignalRef(), temp_value);
+                VariablesSave.push_back(temp_value);               
+              }
+            } 
+            
+            // Large step
+            it.second->doStep(time);
+            // Get data after large step
+            logDebug("DEBUGGING: Getting all variables again after big step, and saving to list"); 
+
+            for (int j = 0; j < noneParameterVariables.size(); j++)
+            {        
+              fmus[i]->getReal(noneParameterVariables[j].getSignalRef(), temp_value);
+              VariablesLargeStep.push_back(temp_value);
             }
-          }
+            
+            // Time to reset            
+            fmi_status = fmi2_import_set_fmu_state(fmu_in,s);
+            if (fmi2_status_ok != fmi_status) logError("fmi2_import_set_fmu_state failed");          
+            //logDebug("DEBUGGING: Setting time to "+std::to_string(time-communicationInterval));
+            for (int j = 0; j < noneParameterVariables.size(); j++)
+            {                            
+              fmus[i]->getReal(noneParameterVariables[j].getSignalRef(), temp_value);
+              VariablesSave[j]= temp_value;
+            }  
+            
+            // Then go 2 steps
+            logDebug("DEBUGGING: 2x Small doStep");
+            logDebug("DEBUGGING: Time in the solver is: "+std::to_string(it.second->getTime()));
+            it.second->setTime(time-actualCommunicationInterval);
+            it.second->setFmuTime(time-actualCommunicationInterval,i);            
+            it.second->doStep(halftime);
+            it.second->doStep(time);
+            
+            // Get data after two small steps
+            allVariables = fmus[i]->getAllVariables();
+            logDebug("DEBUGGING: Getting all variables again after two small steps, and saving to list"); 
+            for (int j = 0; j < noneParameterVariables.size(); j++)
+            {
+              fmus[i]->getReal(noneParameterVariables[j].getSignalRef(), temp_value);
+              VariablesSmallStep.push_back(temp_value);
+            }
+            
+            logDebug("DEBUGGING: Comparing all variables");
+            for (int j = 0; j < noneParameterVariables.size(); j++)
+            {
+              est_error = VariablesLargeStep[j]-VariablesSmallStep[j];
+              if (est_error < 0)
+                est_error = -est_error;
+              logDebug("DEBUGGING: differance for Variable"+std::to_string(j)+" is: "+std::to_string(est_error));
+              if (biggest_est_error < est_error)
+              {
+                logDebug("DEBUGGING: error is larger than previously recorded: setting biggest error to: "+std::to_string(est_error));
+                biggest_est_error = est_error;              
+                if (est_error > tolerance && mustRollback == false)
+                {
+                logDebug("DEBUGGING: error: "+std::to_string(est_error)+" is larger than tolerance: "+std::to_string(tolerance)+". We will rollback.");  
+                mustRollback = true;
+                }
+              }
+            }
+            logDebug("DEBUGGING: Biggest error is: "+std::to_string(biggest_est_error));          
+            if (fmi2_status_ok != fmi_status) logError("fmi2_import_set_fmu_state failed");    
+            
+            // Reset vectors for next loop.
+            noneParameterVariables.clear();
+            VariablesSave.clear();
+            VariablesLargeStep.clear();
+            VariablesSmallStep.clear();
+          }      
+          
         }
-      }
-      // call doStep, except for FMUs
-      for (const auto& it : subModels)
-      {
-        if (oms_component_fmu_old != it.second->getType())
-        {
-
-          fmuwrap = (oms2::FMUWrapper*) it.second;
-          fmu_in = fmuwrap->getFMU();
+        else // Else ME
+        {                    
+          logDebug("DEBUGGING: Entering ME Loop");
+          fmus = it.second->getFmus();     
+          
           // Get start States
-          fmi_status = fmi2_import_get_fmu_state(fmu_in, s );  // TODO: Add check for FMU_Status with error message ?
-          fmi_import_vect.push_back(fmu_in);
-          s_vect.push_back(s);                                 // TODO: make it a copy insead? not sure, pointer should be editing stuff?
-          numStates[fmuIndex] = fmi2_import_get_number_of_continuous_states(fmu_in);
-          fmi_status = fmi2_import_get_continuous_states(fmu_in, states_start[states_start.size()][0], numStates[fmuIndex]);
-          fmi_status = fmi2_import_get_derivatives(fmu_in, states_start_der[states_start_der.size()][0], numStates[fmuIndex]);
-          fmi_status = fmi2_import_get_nominals_of_continuous_states(fmu_in, states_start_nominal[states_start_nominal.size()][0], numStates[fmuIndex]);
+          states_start.push_back(it.second->getStates());
+          states_start_der.push_back(it.second->getStatesDer());
+          states_start_nominal.push_back(it.second->getStatesNominal());
 
-
+          for (int i = 0; i < fmus.size(); i++)
+          {
+            fmu_in = fmus[i]->getFMU();
+            fmi_status = fmi2_import_get_fmu_state(fmu_in, &s ); // TODO: Add check for FMU_Status with error message ?
+            fmi_import_vect.push_back(fmu_in);
+            s_vect.push_back(s);
+          }
 
           // Do 1 step to stopTime = time for all FMUs
           it.second->doStep(time);
-          fmi_status = fmi2_import_get_fmu_state(fmu_in, s );
-          fmi_status = fmi2_import_get_continuous_states(fmu_in, states_bigstep[states_bigstep.size()][0], numStates[fmuIndex]);
-          fmi_status = fmi2_import_get_derivatives(fmu_in, states_bigstep_der[states_bigstep_der.size()][0], numStates[fmuIndex]);
-          fmi_status = fmi2_import_get_nominals_of_continuous_states(fmu_in, states_bigstep_nominal[states_bigstep_nominal.size()][0], numStates[fmuIndex]);
-          fmi_status = fmi2_import_set_fmu_state(fmi_import_vect.back(), *s_vect.back());
-
+          states_bigstep.push_back(it.second->getStates());
+          states_bigstep_der.push_back(it.second->getStatesDer());
+          states_bigstep_nominal.push_back(it.second->getStatesNominal());
+          it.second->setStates(states_start.back(),states_start_der.back(),states_start_nominal.back());
+          for (int i = 0; i < fmus.size(); i++)
+          {
+            fmi_status = fmi2_import_set_fmu_state(fmi_import_vect[fmi_import_vect.size()-i-1], s_vect[s_vect.size()-i-1]); // Iterate through backwards, thats fine right?
+          }
           // Do 2 steps to stopTime = time but with a step in the middle
           it.second->doStep(halftime);
           it.second->doStep(time);
-          fmi_status = fmi2_import_get_fmu_state(fmu_in, s );
-          fmi_status = fmi2_import_get_continuous_states(fmu_in, states_smallstep[states_smallstep.size()][0], numStates[fmuIndex]);
-          fmi_status = fmi2_import_get_derivatives(fmu_in, states_smallstep_der[states_smallstep_der.size()][0], numStates[fmuIndex]);
-          fmi_status = fmi2_import_get_nominals_of_continuous_states(fmu_in, states_smallstep_nominal[states_smallstep_nominal.size()][0], numStates[fmuIndex]);
 
+          states_smallstep.push_back(it.second->getStates());
+          states_smallstep_der.push_back(it.second->getStatesDer());			     // Do we need this?
+          states_smallstep_nominal.push_back(it.second->getStatesNominal());	 // Do we need this?
           fmuIndex++;
-          for (int j = 0; j < numStates[fmuIndex]; j++)
+          for (int j = 0; j < states_start[states_start.size()].size(); j++)
           {
-            est_error = 0;  // Obviously not working, add error from s, not sure how to acess variables in s.
+            est_error = fabs(*states_smallstep[states_smallstep.size()][j]-*states_bigstep[states_bigstep.size()][j]);  //Simple Error estimate to start. TODO: Fix better error estimate.
             if (est_error > tolerance)
             {
               if (biggest_est_error < est_error)
@@ -1185,26 +1255,73 @@ oms_status_enu_t oms2::FMICompositeModel::stepUntilVariableStep(ResultWriter& re
             }
           }
         }
+
       }
-      // If rollback, required, reset time variables and go back.
-      if (mustRollback)
+      // MAYBE put subModels loop back here? I dont know exactly.
+      
+      // If rollback, required, reset variables on all fmus and go back.
+      // Otherwise just scale up steptime to make it faster.
+      if (mustRollback) // if rollback, 
       {
-        fmuIndex = 0;
-        for (const auto& it : solvers)
-        {
-          it.second->setStates(states_start[fmuIndex],states_start_der[fmuIndex],states_start_nominal[fmuIndex]);
-          fmuIndex++;
-        }
-        for (int i=0; i<fmi_import_vect.size(); ++i)
-        {
-          fmi_status = fmi2_import_set_fmu_state(fmi_import_vect[i], *s_vect[i]);
-        }
-        time -= communicationInterval;
-        communicationInterval = communicationInterval*tolerance/(biggest_est_error*rescale_factor);
+        logDebug("DEBUGGING: Going to rollback, h is currently: "+std::to_string(actualCommunicationInterval));     
+        time -= actualCommunicationInterval;
+        communicationInterval = actualCommunicationInterval*safety_factor*std::pow(tolerance/biggest_est_error,0.25);
+        actualCommunicationInterval = communicationInterval;
         halftime = time+communicationInterval/2;
-        time += communicationInterval;
+        time += communicationInterval;            
+        logDebug("DEBUGGING: h is now: "+std::to_string(communicationInterval)); 
+        for (int i=0; i<fmi_import_vect.size(); ++i) // Reset all FMU states
+        {
+          fmi_status = fmi2_import_set_fmu_state(fmi_import_vect[i], s_vect[i]);  
+        }           
+        for (auto const& it : solvers) //
+        {         
+          solverMethod_comp = it.second->getMethod();
+          if (solverMethod_comp == oms_solver_internal) // If CS has different way of doing setTime()
+          {      
+            fmus = it.second->getFmus();    
+            for (int n = 0; n < fmus.size(); n++)
+            {
+              it.second->setTime(time-actualCommunicationInterval);
+              it.second->setFmuTime(time-actualCommunicationInterval,fmuIndex);    
+            }
+          }  
+        }
+        biggest_est_error = tolerance/2;
+        logDebug("Rollbacking and trying doStep: " + std::to_string(time-actualCommunicationInterval) + " ----> " + std::to_string(time));
+      }        
+      else // if the step was fine, lets increase h a bit.
+      {
+        logDebug("DEBUGGING: Not going to rollback, h is currently: "+std::to_string(actualCommunicationInterval));  
+       /* if(safety_factor*std::pow(tolerance/biggest_est_error,0.25) > 1.89)
+          communicationInterval = actualCommunicationInterval*1.2;
+        else if v*/
+        if(safety_factor*tolerance/biggest_est_error > 1)
+        {
+          communicationInterval = actualCommunicationInterval*safety_factor*std::pow(tolerance/biggest_est_error,0.25);
+          biggest_est_error = tolerance/2;
+        }
+        logDebug("DEBUGGING: h is now: "+std::to_string(communicationInterval));  
+        
+        // call doStep, for none-FMUs (eg. lookup table etc)
+        for (const auto& it : subModels)
+        {
+          logDebug("DEBUGGING: Entering SubModels Loop");
+          if (oms_component_fmu_old != it.second->getType()) // Check so its NOT an fmu, eg. Lookup table
+          {          
+            logDebug("DEBUGGING: Found a non-fmu entry in subModels, running doStep");          
+            it.second->doStep(time);
+          }
+        }         
       }
+
+      fmi_status = fmi2_import_free_fmu_state(fmu_in, &s);  
+      // Reset vectors for next loop.       
+      fmi_import_vect.clear();
+      s_vect.clear();       
+      
     }
+    logDebug("DEBUGGING: Doing realtime sync.");  
     if (realtime_sync)
     {
       auto now = std::chrono::steady_clock::now();

@@ -96,6 +96,7 @@ namespace oms2
 
     oms_status_enu_t registerSignalsForResultFile(oms3::ResultWriter& resultWriter);
     oms_status_enu_t emit(oms3::ResultWriter& resultWriter);
+    std::vector<oms2::Variable> getAllVariables() {return allVariables;};
 
     void addSignalsToResults(const std::string& regex);
     void removeSignalsFromResults(const std::string& regex);
