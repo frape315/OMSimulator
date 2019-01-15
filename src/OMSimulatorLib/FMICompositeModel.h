@@ -186,6 +186,7 @@ namespace oms2
     double time;
     double halftime;
     double tolerance;
+    double err_tolerance = 1e-4;
     double communicationInterval;
     double loggingInterval;
     double tLastEmit;
@@ -196,7 +197,7 @@ namespace oms2
     fmi2_import_t* fmu_in;
     fmi2_FMU_state_t s = NULL;
     oms2::FMUWrapper* fmuwrap;
-    int fmuIndex;
+    int fmuIndex = 0;
     Clock clock;
     unsigned int clock_id;
     bool mustRollback = true;
@@ -204,7 +205,8 @@ namespace oms2
     std::vector<size_t> numStates;
     std::vector<oms2::FMUWrapper*> fmus;
     std::vector<oms2::Variable> allVariables;
-    std::vector<oms2::Variable> noneParameterVariables;
+    std::vector<oms2::Variable> errorControlVariables;
+    std::vector<int> stateIndex;
     std::vector<double> VariablesSave;
     std::vector<double> VariablesLargeStep;
     std::vector<double> VariablesSmallStep;
@@ -221,7 +223,7 @@ namespace oms2
     std::vector<std::vector<double*>> states_smallstep_der;
     std::vector<std::vector<double*>> states_smallstep_nominal;
     double est_error;
-    double biggest_est_error;
+    double biggest_est_error = err_tolerance/2;
     double safety_factor = 0.95;
     double actualCommunicationInterval;
 

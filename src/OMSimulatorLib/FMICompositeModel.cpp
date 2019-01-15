@@ -881,7 +881,6 @@ oms_status_enu_t oms2::FMICompositeModel::initialize(double startTime, double to
   this->time = startTime;
   this->tolerance = tolerance;
   this->tLastEmit = startTime;
-  this->biggest_est_error = tolerance/2;
 
   // check if there is a solver instance assigned to each FMU
   for (const auto& it : subModels)
@@ -1079,6 +1078,7 @@ oms_status_enu_t oms2::FMICompositeModel::stepUntilStandard(oms3::ResultWriter& 
 oms_status_enu_t oms2::FMICompositeModel::stepUntilVariableStep(oms3::ResultWriter& resultWriter, double stopTime, double communicationInterval, double loggingInterval, bool realtime_sync)
 {
   logTrace();
+  bool firstCall = true;
   auto start = std::chrono::steady_clock::now();
   while (time < stopTime)
   {
@@ -1098,24 +1098,72 @@ oms_status_enu_t oms2::FMICompositeModel::stepUntilVariableStep(oms3::ResultWrit
     
     while(mustRollback && time <= stopTime)
     {
-      fmuIndex = 0;
       mustRollback = false;
       // call doStep for FMUs
       logDebug("DEBUGGING: Just before the for loops start");
+      
+      if(firstCall) // Collect all variables to do error control on.
+      { 
+        errorControlVariables.clear();   
+        stateIndex.clear();        
+        firstCall = false;
+        logDebug("DEBUGGING: Collecting all variables to do error control on.");
+        for (const auto& it: solvers) 
+        {          
+          solverMethod_comp = it.second->getMethod();
+          if (solverMethod_comp == oms_solver_internal) // If CS
+          {
+            fmus = it.second->getFmus();
+            for (int i = 0; i < fmus.size(); i++)
+            {
+              allVariables = fmus[i]->getAllVariables();
+              for (int j = 0; j < allVariables.size(); j++) // Get all states
+              {            
+                if(allVariables[j].isState())
+                {
+                  errorControlVariables.push_back(allVariables[j]);
+                  stateIndex.push_back(fmuIndex);                  
+                }
+              } 
+              fmuIndex++;              
+            }
+          }
+        }
+        if (errorControlVariables.size() == 0) // If no states found in the solvers, go by reals instead.
+        {
+          fmuIndex = 0;
+          logWarning("No States found, doing error control on reals instead");
+          for (const auto& it: solvers) 
+          {
+            if (solverMethod_comp == oms_solver_internal) // If CS
+            {
+              fmus = it.second->getFmus();
+              for (int i = 0; i < fmus.size(); i++)
+              {
+                for (int j = 0; j < allVariables.size(); j++)
+                {
+                  if(allVariables[j].isTypeReal())
+                  {
+                    errorControlVariables.push_back(allVariables[j]);   
+                    stateIndex.push_back(fmuIndex);       
+                  }                             
+                }
+                fmuIndex++; 
+              }
+            }
+          }
+        }        
+      }
+      fmuIndex = 0; // Reset to use as counter and as indexer, saving memory. 
       for (const auto& it : solvers)
-      {
+      {        
         logDebug("DEBUGGING: Solver loop");
         solverMethod_comp = it.second->getMethod();
         if (solverMethod_comp == oms_solver_internal) // If CS
         {
           fmus = it.second->getFmus(); // Get FMUs in the solver
-          logDebug("DEBUGGING: Entering CS Loop, there are :" + std::to_string(fmus.size())+" CS fmu(s) in this solver");
-          
-          //fmuwrap = (oms2::FMUWrapper*) it.second;          
-          
-          logDebug("DEBUGGING: Starting loop over all fmus in this solver");
-          
-          for (int i = 0; i < fmus.size(); i++)
+          logDebug("DEBUGGING: Entering CS Loop, there are :" + std::to_string(fmus.size())+" CS fmu(s) in this solver");            
+          for (int i = 0; i < fmus.size(); i++) // Loop over fmus in this solver.
           {
             fmu_in = fmus[i]->getFMU();
             logDebug("DEBUGGING: get the fmu state next"); 
@@ -1125,16 +1173,22 @@ oms_status_enu_t oms2::FMICompositeModel::stepUntilVariableStep(oms3::ResultWrit
             logDebug("DEBUGGING: We just finished getting the fmu_state"); 
             s_vect.push_back(s);
             fmi_import_vect.push_back(fmu_in);
-              
+            
             allVariables = fmus[i]->getAllVariables();
             logDebug("DEBUGGING: The FMU has: "+std::to_string(allVariables.size())+" variables."); 
-
-            for (int j = 0; j < allVariables.size(); j++)
+            logDebug("DEBUGGING: The error variable vector is: "+std::to_string(errorControlVariables.size())+" elements long.");
+            logDebug("DEBUGGING: The error variable vector is: "+std::to_string(stateIndex.size())+" elements long.");
+            for (int j = 0; j < errorControlVariables.size(); j++)
             {
-              if(!allVariables[j].isParameter())
+              logDebug("DEBUGGING: The error variable: "+errorControlVariables[j].getName()+" has fmuindex: "+std::to_string(stateIndex[j]));
+            }            
+            logDebug("DEBUGGING: The fmuIndex is: "+std::to_string(fmuIndex));
+            
+            for (int j = 0; j < errorControlVariables.size(); j++) // errorControlVariables.size() = stateIndex.size() could change this to a map with 2 variables instead of 2 vectors.
+            {            
+              if(stateIndex[j] == fmuIndex)
               {
-                noneParameterVariables.push_back(allVariables[j]);
-                fmus[i]->getReal(allVariables[j].getSignalRef(), temp_value);
+                fmus[i]->getReal(errorControlVariables[j].getSignalRef(), temp_value);
                 VariablesSave.push_back(temp_value);               
               }
             } 
@@ -1144,9 +1198,102 @@ oms_status_enu_t oms2::FMICompositeModel::stepUntilVariableStep(oms3::ResultWrit
             // Get data after large step
             logDebug("DEBUGGING: Getting all variables again after big step, and saving to list"); 
 
-            for (int j = 0; j < noneParameterVariables.size(); j++)
+            for (int j = 0; j < errorControlVariables.size(); j++)
+            { 
+              if(stateIndex[j] == fmuIndex)
+              {           
+                logDebug("DEBUGGING: Variable Name is: "+errorControlVariables[j].getName()); 
+                fmus[i]->getReal(errorControlVariables[j].getSignalRef(), temp_value);
+                VariablesLargeStep.push_back(temp_value);
+              }
+            }
+            
+            // Time to reset state before 2 smaller steps
+            fmi_status = fmi2_import_set_fmu_state(fmu_in,s);
+            
+            if (fmi2_status_ok != fmi_status) logError("fmi2_import_set_fmu_state failed"); 
+                        
+            // Then go 2 steps
+            logDebug("DEBUGGING: 2x Small doStep");
+            it.second->setTime(time-actualCommunicationInterval);
+            it.second->setFmuTime(time-actualCommunicationInterval,i);            
+            it.second->doStep(halftime);
+            it.second->doStep(time);
+            
+            // Get data after two small steps 
+            allVariables = fmus[i]->getAllVariables(); //  not needed?
+            logDebug("DEBUGGING: Getting all variables again after two small steps, and saving to list"); 
+            for (int j = 0; j < errorControlVariables.size(); j++)
+            {
+              if(stateIndex[j] == fmuIndex)
+              {
+                logDebug("DEBUGGING: Variable Name is: "+errorControlVariables[j].getName()); 
+                fmus[i]->getReal(errorControlVariables[j].getSignalRef(), temp_value);
+                VariablesSmallStep.push_back(temp_value);
+              }
+            }
+            
+            logDebug("DEBUGGING: Comparing all variables, size of vector is: "+std::to_string(VariablesSave.size()));
+            logDebug("DEBUGGING: Comparing all variables, size of variable vector is: "+std::to_string(errorControlVariables.size()));
+            logDebug("DEBUGGING: Comparing all variables, size of states vector is: "+std::to_string(stateIndex.size()));
+            for (int j = 0; j < VariablesSave.size(); j++)
+            {
+              est_error = VariablesLargeStep[j]-VariablesSmallStep[j];
+              if (est_error < 0)
+                est_error = -est_error;
+              logDebug("DEBUGGING: differance for Variable"+std::to_string(j)+" is: "+std::to_string(est_error));
+              if (biggest_est_error < est_error)
+              {
+                logDebug("DEBUGGING: error is larger than previously recorded for this step: setting biggest error to: "+std::to_string(est_error));
+                biggest_est_error = est_error;              
+                if (est_error > err_tolerance && mustRollback == false)
+                {
+                  logDebug("DEBUGGING: error: "+std::to_string(est_error)+" is larger than err_tolerance: "+std::to_string(err_tolerance)+". We will rollback.");  
+                  mustRollback = true;
+                }
+              }
+            }
+            logDebug("DEBUGGING: Biggest error is: "+std::to_string(biggest_est_error));          
+            if (fmi2_status_ok != fmi_status) logError("fmi2_import_set_fmu_state failed");    
+            
+            // Reset vectors for next loop.
+            VariablesSave.clear();
+            VariablesLargeStep.clear();
+            VariablesSmallStep.clear();
+            fmuIndex++;
+            /*
+            for (int j = 0; j < allVariables.size(); j++)
+            {            
+              if(allVariables[j].isState())
+              {
+                errorControlVariables.push_back(allVariables[j]);
+                fmus[i]->getReal(allVariables[j].getSignalRef(), temp_value);
+                VariablesSave.push_back(temp_value);               
+              }
+            } 
+            if (errorControlVariables.size() == 0)
+            {
+              logWarning("No States found ")            
+              for (int j = 0; j < allVariables.size(); j++)
+              {
+                if(allVariables[j].isTypeReal())
+                {
+                  errorControlVariables.push_back(allVariables[j]);
+                  fmus[i]->getReal(allVariables[j].getSignalRef(), temp_value);
+                  VariablesSave.push_back(temp_value);               
+                }                
+              }
+            }
+            
+            // Large step
+            it.second->doStep(time);
+            // Get data after large step
+            logDebug("DEBUGGING: Getting all variables again after big step, and saving to list"); 
+
+            for (int j = 0; j < errorControlVariables.size(); j++)
             {        
-              fmus[i]->getReal(noneParameterVariables[j].getSignalRef(), temp_value);
+              logDebug("DEBUGGING: Variable Name is: "+errorControlVariables[j].getName()); 
+              fmus[i]->getReal(errorControlVariables[j].getSignalRef(), temp_value);
               VariablesLargeStep.push_back(temp_value);
             }
             
@@ -1154,9 +1301,10 @@ oms_status_enu_t oms2::FMICompositeModel::stepUntilVariableStep(oms3::ResultWrit
             fmi_status = fmi2_import_set_fmu_state(fmu_in,s);
             if (fmi2_status_ok != fmi_status) logError("fmi2_import_set_fmu_state failed");          
             //logDebug("DEBUGGING: Setting time to "+std::to_string(time-communicationInterval));
-            for (int j = 0; j < noneParameterVariables.size(); j++)
-            {                            
-              fmus[i]->getReal(noneParameterVariables[j].getSignalRef(), temp_value);
+            for (int j = 0; j < errorControlVariables.size(); j++)
+            {      
+              logDebug("DEBUGGING: Variable Name is: "+errorControlVariables[j].getName());                       
+              fmus[i]->getReal(errorControlVariables[j].getSignalRef(), temp_value);
               VariablesSave[j]= temp_value;
             }  
             
@@ -1171,14 +1319,15 @@ oms_status_enu_t oms2::FMICompositeModel::stepUntilVariableStep(oms3::ResultWrit
             // Get data after two small steps
             allVariables = fmus[i]->getAllVariables();
             logDebug("DEBUGGING: Getting all variables again after two small steps, and saving to list"); 
-            for (int j = 0; j < noneParameterVariables.size(); j++)
+            for (int j = 0; j < errorControlVariables.size(); j++)
             {
-              fmus[i]->getReal(noneParameterVariables[j].getSignalRef(), temp_value);
+              logDebug("DEBUGGING: Variable Name is: "+errorControlVariables[j].getName()); 
+              fmus[i]->getReal(errorControlVariables[j].getSignalRef(), temp_value);
               VariablesSmallStep.push_back(temp_value);
             }
             
             logDebug("DEBUGGING: Comparing all variables");
-            for (int j = 0; j < noneParameterVariables.size(); j++)
+            for (int j = 0; j < errorControlVariables.size(); j++)
             {
               est_error = VariablesLargeStep[j]-VariablesSmallStep[j];
               if (est_error < 0)
@@ -1188,9 +1337,9 @@ oms_status_enu_t oms2::FMICompositeModel::stepUntilVariableStep(oms3::ResultWrit
               {
                 logDebug("DEBUGGING: error is larger than previously recorded: setting biggest error to: "+std::to_string(est_error));
                 biggest_est_error = est_error;              
-                if (est_error > tolerance && mustRollback == false)
+                if (est_error > err_tolerance && mustRollback == false)
                 {
-                logDebug("DEBUGGING: error: "+std::to_string(est_error)+" is larger than tolerance: "+std::to_string(tolerance)+". We will rollback.");  
+                logDebug("DEBUGGING: error: "+std::to_string(est_error)+" is larger than err_tolerance: "+std::to_string(err_tolerance)+". We will rollback.");  
                 mustRollback = true;
                 }
               }
@@ -1199,10 +1348,12 @@ oms_status_enu_t oms2::FMICompositeModel::stepUntilVariableStep(oms3::ResultWrit
             if (fmi2_status_ok != fmi_status) logError("fmi2_import_set_fmu_state failed");    
             
             // Reset vectors for next loop.
-            noneParameterVariables.clear();
+            errorControlVariables.clear();
             VariablesSave.clear();
             VariablesLargeStep.clear();
             VariablesSmallStep.clear();
+            */
+            
           }      
           
         }
@@ -1245,7 +1396,7 @@ oms_status_enu_t oms2::FMICompositeModel::stepUntilVariableStep(oms3::ResultWrit
           for (int j = 0; j < states_start[states_start.size()].size(); j++)
           {
             est_error = fabs(*states_smallstep[states_smallstep.size()][j]-*states_bigstep[states_bigstep.size()][j]);  //Simple Error estimate to start. TODO: Fix better error estimate.
-            if (est_error > tolerance)
+            if (est_error > err_tolerance)
             {
               if (biggest_est_error < est_error)
               {
@@ -1265,7 +1416,7 @@ oms_status_enu_t oms2::FMICompositeModel::stepUntilVariableStep(oms3::ResultWrit
       {
         logDebug("DEBUGGING: Going to rollback, h is currently: "+std::to_string(actualCommunicationInterval));     
         time -= actualCommunicationInterval;
-        communicationInterval = actualCommunicationInterval*safety_factor*std::pow(tolerance/biggest_est_error,0.25);
+        communicationInterval = actualCommunicationInterval*safety_factor*std::pow(err_tolerance/biggest_est_error,0.25);
         actualCommunicationInterval = communicationInterval;
         halftime = time+communicationInterval/2;
         time += communicationInterval;            
@@ -1286,20 +1437,19 @@ oms_status_enu_t oms2::FMICompositeModel::stepUntilVariableStep(oms3::ResultWrit
               it.second->setFmuTime(time-actualCommunicationInterval,fmuIndex);    
             }
           }  
-        }
-        biggest_est_error = tolerance/2;
+        }        
         logDebug("Rollbacking and trying doStep: " + std::to_string(time-actualCommunicationInterval) + " ----> " + std::to_string(time));
       }        
       else // if the step was fine, lets increase h a bit.
       {
         logDebug("DEBUGGING: Not going to rollback, h is currently: "+std::to_string(actualCommunicationInterval));  
-       /* if(safety_factor*std::pow(tolerance/biggest_est_error,0.25) > 1.89)
+       /* if(safety_factor*std::pow(err_tolerance/biggest_est_error,0.25) > 1.89)
           communicationInterval = actualCommunicationInterval*1.2;
         else if v*/
-        if(safety_factor*tolerance/biggest_est_error > 1)
+        if(safety_factor*err_tolerance/biggest_est_error > 1)
         {
-          communicationInterval = actualCommunicationInterval*safety_factor*std::pow(tolerance/biggest_est_error,0.25);
-          biggest_est_error = tolerance/2;
+          communicationInterval = actualCommunicationInterval*safety_factor*std::pow(err_tolerance/biggest_est_error,0.25);
+          biggest_est_error = err_tolerance/2;
         }
         logDebug("DEBUGGING: h is now: "+std::to_string(communicationInterval));  
         
@@ -1314,7 +1464,7 @@ oms_status_enu_t oms2::FMICompositeModel::stepUntilVariableStep(oms3::ResultWrit
           }
         }         
       }
-
+      biggest_est_error = err_tolerance/2;
       fmi_status = fmi2_import_free_fmu_state(fmu_in, &s);  
       // Reset vectors for next loop.       
       fmi_import_vect.clear();
