@@ -124,7 +124,8 @@ namespace oms3
       {"--timeout", "", "Specifies the maximum allowed time in seconds for running a simulation (0 disables)", re_number, Flags::Timeout, false},
       {"--tolerance", "", "Specifies the relative tolerance", re_double, Flags::Tolerance, false},
       {"--version", "-v", "Displays version information", re_void, Flags::Version, false},
-      {"--workingDir", "", "Specifies the working directory", re_default, Flags::WorkingDir, false}
+      {"--workingDir", "", "Specifies the working directory", re_default, Flags::WorkingDir, false},
+      {"--variableStep", "", "Changes algorithm inside the Strong Coupled systems to variable step solver.", re_bool, Flags::VariableStep, false}
     };
 
   private:

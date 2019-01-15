@@ -288,3 +288,9 @@ oms_status_enu_t oms3::Flags::WorkingDir(const std::string& value)
   oms3_setWorkingDirectory(value.c_str());
   return oms_status_ok;
 }
+
+oms_status_enu_t oms3::Flags::VariableStep(const std::string& value)
+{
+  GetInstance().variableStep = (value == "true");
+  return oms_status_ok;
+}
