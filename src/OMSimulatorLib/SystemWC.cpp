@@ -173,7 +173,7 @@ oms_status_enu_t oms3::SystemWC::stepUntil(double stopTime, void (*cb)(const cha
 {
   CallClock callClock(clock);
   ComRef modelName = this->getModel()->getCref();
-  
+
   fmi2_status_t fmi_status;
   double startTime=time;
 
@@ -183,6 +183,10 @@ oms_status_enu_t oms3::SystemWC::stepUntil(double stopTime, void (*cb)(const cha
   if(oms3::Flags::VariableStep()) // If variable step.
   {
     int fmuIndex = 0;
+    std::map<ComRef, Component*> FMUcomponents;
+    std::map<ComRef, Component*> canGetAndSetStateFMUcomponents;
+    std::map<ComRef, Component*> noneFMUcomponents;
+    bool firstTime = true;
     while (time < stopTime)
     {
       double tNext = time+stepSize;
@@ -190,33 +194,63 @@ oms_status_enu_t oms3::SystemWC::stepUntil(double stopTime, void (*cb)(const cha
       {
         tNext = stopTime;
         stepSize = tNext-time;
-      }      
+      }
       logDebug("DEBUGGING: doStep: " + std::to_string(time) + " -> " + std::to_string(tNext));
 
-      oms_status_enu_t status;
-      for (const auto& component : getComponents())
-      { 
-        fmi2_import_t* fmu_in;
-        fmi2_FMU_state_t s = NULL;      
-        if (oms_component_fmu == component.second->getType()) // Check that its an FMU
+      if(firstTime) // first time get a list of all components set up for which can get/Set fmu states.
+      {
+        firstTime = false;
+        for (const auto& component : getComponents())
         {
-          fmu_in = dynamic_cast<ComponentFMUCS*>(component.second)->getFMU();
-          s = NULL;          
-          fmi_status = fmi2_import_get_fmu_state(fmu_in,&s);
-          sVect.push_back(s);
-          fmiImportVect.push_back(fmu_in);             
-       
-          status = component.second->stepUntil(tNext);
-          if (oms_status_ok != status)
+          if (oms_component_fmu == component.second->getType()) // Check that its an FMU
           {
-            if (cb)
-              cb(modelName.c_str(), tNext, status);
-            return status;
+            if(dynamic_cast<ComponentFMUCS*>(component.second)->getFMUInfo()->getCanGetAndSetFMUstate())
+            {
+              canGetAndSetStateFMUcomponents.insert(std::pair<ComRef, Component*>(component.first,component.second));
+            }
+            else
+            {
+              FMUcomponents.insert(std::pair<ComRef, Component*>(component.first,component.second));
+            }
           }
-        }        
+          else
+          {
+            noneFMUcomponents.insert(std::pair<ComRef, Component*>(component.first,component.second));
+          }
+        }
+        if(canGetAndSetStateFMUcomponents.size() == 0) return oms_status_error;
       }
-      
-      for (const auto& subsystem : getSubSystems())
+      oms_status_enu_t status;
+      for (const auto& component : canGetAndSetStateFMUcomponents) // Get states and stepUntil for FMUs that can get state.
+      {
+        fmi2_import_t* fmu_in;
+        fmi2_FMU_state_t s = NULL;
+        fmu_in = dynamic_cast<ComponentFMUCS*>(component.second)->getFMU();
+        s = NULL;
+        fmi_status = fmi2_import_get_fmu_state(fmu_in,&s);
+        sVect.push_back(s);
+        fmiImportVect.push_back(fmu_in);
+
+        status = component.second->stepUntil(tNext);
+        if (oms_status_ok != status)
+        {
+          if (cb)
+            cb(modelName.c_str(), tNext, status);
+          return status;
+        }
+      }
+      for (const auto& component : noneFMUcomponents) // stepUntil for noneFmus
+      {
+        status = component.second->stepUntil(tNext);
+        if (oms_status_ok != status)
+        {
+          if (cb)
+            cb(modelName.c_str(), tNext, status);
+          return status;
+        }
+      }
+
+      for (const auto& subsystem : getSubSystems()) // stepUntill for subsystems of ME FMUs, TODO: Fix rollback here too.
       {
         status = subsystem.second->stepUntil(tNext, NULL);
         if (oms_status_ok != status)
@@ -225,70 +259,100 @@ oms_status_enu_t oms3::SystemWC::stepUntil(double stopTime, void (*cb)(const cha
             cb(modelName.c_str(), tNext, status);
           return status;
         }
-      }    
-      
+      }
+
       // get inputs at the end of all steps.
       std::vector<double> inputVect;
-      std::vector<double> outputVect;      
-      if(oms_status_ok != getInput(outputsGraph,inputVect)) return oms_status_error;
-      
+      std::vector<double> outputVect;
+
+      if(oms_status_ok != getInput(outputsGraph,inputVect,FMUcomponents)) return oms_status_error;
       time = tNext;
       if (isTopLevelSystem())
         getModel()->emit(time);
-      updateInputs(outputsGraph);
+      if(!FMUcomponents.empty()) // If we have FMUs that cant handle get/Set fmu state, we need to do the simulation order a bit different.
+      {
+        updateCanGetFMUs(outputsGraph,canGetAndSetStateFMUcomponents);
+      }
+      if(FMUcomponents.empty()) //If all FMUS can get and set states, we can do the error control after algebraic loops! YEY
+      {        
+        updateInputs(outputsGraph);
+      }
       if (isTopLevelSystem())
         getModel()->emit(time);
-      
       // get outputs after communication steps
-      if(oms_status_ok != getOutput(outputsGraph,outputVect)) return oms_status_error;
-      
+      if(oms_status_ok != getOutput(outputsGraph,outputVect,FMUcomponents)) return oms_status_error;
+        
       if (inputVect.size() != outputVect.size()) return oms_status_error;
       double biggestDifferance = 0.0;
-      for (int n=0; n < inputVect.size();n++)
+      for (int n=0; n < inputVect.size();n++) // Calculate error in the FMUs we do error_control on.
       {
         double error;
         error = inputVect[n]-outputVect[n];
         if (error < 0) error = -error;
-        if (error > biggestDifferance) biggestDifferance = error;    
-        logDebug("DEBUGGING: Input is: " + std::to_string(inputVect[n]) + " output is: " + std::to_string(outputVect[n]));    
-        logDebug("DEBUGGING: error is: " + std::to_string(error) + " Biggest Differance is: " + std::to_string(biggestDifferance));    
+        if (error > biggestDifferance) biggestDifferance = error;
+        logDebug("DEBUGGING: Input is: " + std::to_string(inputVect[n]) + " output is: " + std::to_string(outputVect[n]));
+        logDebug("DEBUGGING: error is: " + std::to_string(error) + " Biggest Differance is: " + std::to_string(biggestDifferance));
       }
       double changeTolerance = 1e-2;
       double safety_factor = 0.90;
       double fixRatio = safety_factor*changeTolerance/biggestDifferance;
       logDebug("DEBUGGING: fixRatio is: " + std::to_string(fixRatio));
-      
+
       if (biggestDifferance > changeTolerance) //Going to rollback.
       {
-        //Fix fmus 
+        logDebug("DEBUGGING: time is: " + std::to_string(time));
+        logDebug("DEBUGGING: h is: " + std::to_string(stepSize));
+        //Fix fmus
         for (int i=0; i<fmiImportVect.size(); ++i) // Reset all FMU states
         {
-          fmi_status = fmi2_import_set_fmu_state(fmiImportVect[i], sVect[i]);  
-        }  
+          fmi_status = fmi2_import_set_fmu_state(fmiImportVect[i], sVect[i]);
+        }
         //Fix time
+        logDebug("DEBUGGING: tNext is: " + std::to_string(tNext));
         time = tNext-stepSize;
+        logDebug("DEBUGGING: time is after change: " + std::to_string(time));
         for (const auto& component : getComponents())
-        {   
+        {
           if (oms_component_fmu == component.second->getType())
-          { 
+          {
             dynamic_cast<ComponentFMUCS*>(component.second)->setFmuTime(time);
           }
         }
         //Fix Steptime.
-        stepSize = stepSize*pow(fixRatio,0.25);        
+        stepSize = stepSize*pow(fixRatio,0.25);
         logDebug("DEBUGGING: rollbacking, new h: " + std::to_string(stepSize));
       }
       else // Not going to rollback.
       {
         if (safety_factor*changeTolerance/biggestDifferance > 1)
         {
-          stepSize = stepSize*pow(fixRatio,0.25);        
+          stepSize = stepSize*pow(fixRatio,0.25);
           logDebug("DEBUGGING: Not rollbacking, new h: " + std::to_string(stepSize));
         }
         else
-          logDebug("DEBUGGING: Not rollbacking, keeping old h: " + std::to_string(stepSize));          
-      }   
-      
+          logDebug("DEBUGGING: Not rollbacking, keeping old h: " + std::to_string(stepSize));
+        if (!FMUcomponents.empty())
+        {
+          for (const auto& component : FMUcomponents) // These FMUs cant rollback, so only simulating them when we can.
+          {
+            status = component.second->stepUntil(tNext);
+            if (oms_status_ok != status)
+            {
+              if (cb)
+                cb(modelName.c_str(), tNext, status);
+              return status;
+            }           
+          }    
+          if (isTopLevelSystem())
+            getModel()->emit(time); 
+          updateCantGetFMUs(outputsGraph,FMUcomponents); // Update the last FMUS
+          if (isTopLevelSystem())
+            getModel()->emit(time);        
+        }
+      }
+           
+      fmiImportVect.clear();
+      sVect.clear();
       if (cb)
         cb(modelName.c_str(), time, oms_status_ok);
 
@@ -300,6 +364,7 @@ oms_status_enu_t oms3::SystemWC::stepUntil(double stopTime, void (*cb)(const cha
         cb(modelName.c_str(), time, oms_status_discard);
         return oms_status_discard;
       }
+      
     }
   }
   else // If fixed step.
@@ -422,38 +487,228 @@ oms_status_enu_t oms3::SystemWC::setRealInputDerivative(const ComRef& cref, doub
 }
 
 
-    
-oms_status_enu_t oms3::SystemWC::getInput(oms3::DirectedGraph& graph, std::vector<double>& inputVect)
+
+oms_status_enu_t oms3::SystemWC::getInput(oms3::DirectedGraph& graph, std::vector<double>& inputVect,std::map<ComRef, Component*> FMUcomponents)
 {
   const std::vector< std::vector< std::pair<int, int> > >& sortedConnections = graph.getSortedConnections();
   inputVect.clear();
-  for(int i=0; i<sortedConnections.size(); i++)
-  {    
-    int input = sortedConnections[i][0].second;
-    if (graph.getNodes()[input].getType() == oms_signal_type_real)        
+  if (!FMUcomponents.empty())
+  {
+    for(int i=0; i<sortedConnections.size(); i++)
     {
-      double inValue = 0.0;
-      if (oms_status_ok != getReal(graph.getNodes()[input].getName(), inValue)) return oms_status_error;        
-      inputVect.push_back(inValue);
+      int input = sortedConnections[i][0].second;
+      oms3::ComRef inputName(graph.getNodes()[input].getName());
+      oms3::ComRef inputModel = inputName.pop_front();
+      int output = sortedConnections[i][0].first;
+      oms3::ComRef outputName(graph.getNodes()[output].getName());
+      oms3::ComRef outputModel = outputName.pop_front();
+      if (FMUcomponents.find(inputModel)->first == inputModel || FMUcomponents.find(outputModel)->first == outputModel)
+      {
+        if (graph.getNodes()[input].getType() == oms_signal_type_real)
+        {
+          double inValue = 0.0;
+          if (oms_status_ok != getReal(graph.getNodes()[input].getName(), inValue)) return oms_status_error;
+          inputVect.push_back(inValue);
+        }
+      }
     }
-  } 
+  }
+  else
+  {
+    for(int i=0; i<sortedConnections.size(); i++)
+    {
+      int input = sortedConnections[i][0].second;
+      if (graph.getNodes()[input].getType() == oms_signal_type_real)
+      {
+        double inValue = 0.0;
+        if (oms_status_ok != getReal(graph.getNodes()[input].getName(), inValue)) return oms_status_error;
+        inputVect.push_back(inValue);
+      }
+    }
+  }
   return oms_status_ok;
 }
 
-oms_status_enu_t oms3::SystemWC::getOutput(oms3::DirectedGraph& graph, std::vector<double>& outputVect)
+oms_status_enu_t oms3::SystemWC::getOutput(oms3::DirectedGraph& graph, std::vector<double>& outputVect,std::map<ComRef, Component*> FMUcomponents)
 {
   const std::vector< std::vector< std::pair<int, int> > >& sortedConnections = graph.getSortedConnections();
   outputVect.clear();
-  for(int i=0; i<sortedConnections.size(); i++)
-  {    
-    int output = sortedConnections[i][0].second;
-    if (graph.getNodes()[output].getType() == oms_signal_type_real)        
+  if (!FMUcomponents.empty())
+  {
+    for(int i=0; i<sortedConnections.size(); i++)
     {
-      double outValue = 0.0;
-      if (oms_status_ok != getReal(graph.getNodes()[output].getName(), outValue)) return oms_status_error;        
-      outputVect.push_back(outValue);
+      int output = sortedConnections[i][0].first;
+      int input = sortedConnections[i][0].second;
+      oms3::ComRef outputName(graph.getNodes()[output].getName());
+      oms3::ComRef inputName(graph.getNodes()[input].getName());
+      oms3::ComRef outputModel = outputName.pop_front();
+      oms3::ComRef inputModel = inputName.pop_front();
+      if (FMUcomponents.find(inputModel)->first == inputModel || FMUcomponents.find(outputModel)->first == outputModel)
+      {
+        if (graph.getNodes()[output].getType() == oms_signal_type_real)
+        {
+          double outValue = 0.0;
+          if (oms_status_ok != getReal(graph.getNodes()[output].getName(), outValue)) return oms_status_error;
+          outputVect.push_back(outValue);
+        }
+      }
     }
-  } 
+  }
+  else
+  {
+    for(int i=0; i<sortedConnections.size(); i++)
+    {
+      int output = sortedConnections[i][0].first;
+      if (graph.getNodes()[output].getType() == oms_signal_type_real)
+      {
+        double outValue = 0.0;
+        if (oms_status_ok != getReal(graph.getNodes()[output].getName(), outValue)) return oms_status_error;
+        outputVect.push_back(outValue);
+      }
+    }
+  }
+  return oms_status_ok;
+}
+
+oms_status_enu_t oms3::SystemWC::updateCanGetFMUs(oms3::DirectedGraph& graph,std::map<ComRef, Component*> FMUcomponents)
+{
+  const std::vector< std::vector< std::pair<int, int> > >& sortedConnections = graph.getSortedConnections();
+  for(int i=0; i<sortedConnections.size(); i++)
+  {
+    if (sortedConnections[i].size() == 1)
+    {
+      int output = sortedConnections[i][0].first;
+      int input = sortedConnections[i][0].second;
+      oms3::ComRef outputName(graph.getNodes()[output].getName());
+      oms3::ComRef inputName(graph.getNodes()[input].getName());
+      oms3::ComRef outputModel = outputName.pop_front();
+      oms3::ComRef inputModel = inputName.pop_front();
+      if (FMUcomponents.find(inputModel)->first == inputModel && FMUcomponents.find(outputModel)->first == outputModel)
+      {
+        if (graph.getNodes()[input].getType() == oms_signal_type_real)
+        {
+          double value = 0.0;
+          logDebug("DEBUGGING: We found a link between two fmus that can handle get and set");
+          if (oms_status_ok != getReal(graph.getNodes()[output].getName(), value)) return oms_status_error;
+          if (oms_status_ok != setReal(graph.getNodes()[input].getName(), value)) return oms_status_error;
+
+          // derivatives
+          if (derBuffer)
+          {
+            unsigned int order;
+            if (oms_status_ok == getRealOutputDerivative(graph.getNodes()[output].getName(), derBuffer, order))
+            {
+              //logInfo(graph.getNodes()[output].getName() + " -> " + graph.getNodes()[input].getName() + ": " + std::to_string(derBuffer[0]));
+              if (oms_status_ok != setRealInputDerivative(graph.getNodes()[input].getName(), derBuffer, order)) return oms_status_error;
+            }
+          }
+        }
+        else if (graph.getNodes()[input].getType() == oms_signal_type_integer)
+        {
+          int value = 0.0;
+          if (oms_status_ok != getInteger(graph.getNodes()[output].getName(), value)) return oms_status_error;
+          if (oms_status_ok != setInteger(graph.getNodes()[input].getName(), value)) return oms_status_error;
+        }
+        else if (graph.getNodes()[input].getType() == oms_signal_type_boolean)
+        {
+          bool value = 0.0;
+          if (oms_status_ok != getBoolean(graph.getNodes()[output].getName(), value)) return oms_status_error;
+          if (oms_status_ok != setBoolean(graph.getNodes()[input].getName(), value)) return oms_status_error;
+        }
+        else
+          return logError_InternalError;
+
+      }
+    }
+    else
+    {
+      bool OK = true;
+      for (int j = 0; j < sortedConnections[j].size(); i++)
+      {
+        int output = sortedConnections[i][j].first;
+        int input = sortedConnections[i][j].second;
+        oms3::ComRef outputName(graph.getNodes()[output].getName());
+        oms3::ComRef inputName(graph.getNodes()[input].getName());
+        oms3::ComRef outputModel = outputName.pop_front();
+        oms3::ComRef inputModel = inputName.pop_front();
+        if (FMUcomponents.find(inputModel)->first == inputModel && FMUcomponents.find(outputModel)->first == outputModel)
+        {
+          OK = OK;
+        }
+        else
+        {
+          OK = false;
+        }
+      }
+      if(OK)
+      {
+        if (oms_status_ok != solveAlgLoop(graph, sortedConnections[i])) return oms_status_error;  // This loop will only connect FMUs that can get state, and thus we can solve it.
+      }
+      else
+      {
+        logError("Algebraic Loop connecting FMUs that can get states and FMUs that can't get states, this will not work out. Restart the simulation with fixed step solver.");
+        return oms_status_error;
+      }
+    }
+  }
+  return oms_status_ok;
+}
+oms_status_enu_t oms3::SystemWC::updateCantGetFMUs(oms3::DirectedGraph& graph,std::map<ComRef, Component*> FMUcomponents)
+{
+  const std::vector< std::vector< std::pair<int, int> > >& sortedConnections = graph.getSortedConnections();
+  for(int i=0; i<sortedConnections.size(); i++)
+  {
+    if (sortedConnections[i].size() == 1)
+    {
+      int output = sortedConnections[i][0].first;
+      int input = sortedConnections[i][0].second;
+      oms3::ComRef outputName(graph.getNodes()[output].getName());
+      oms3::ComRef inputName(graph.getNodes()[input].getName());
+      oms3::ComRef outputModel = outputName.pop_front();
+      oms3::ComRef inputModel = inputName.pop_front();
+      if (FMUcomponents.find(inputModel)->first == inputModel || FMUcomponents.find(outputModel)->first == outputModel)
+      {
+        if (graph.getNodes()[input].getType() == oms_signal_type_real)
+        {
+          double value = 0.0;
+          logDebug("DEBUGGING: We found a link between two fmus where atleast one cant handle get and set, so lets update this");
+          if (oms_status_ok != getReal(graph.getNodes()[output].getName(), value)) return oms_status_error;
+          if (oms_status_ok != setReal(graph.getNodes()[input].getName(), value)) return oms_status_error;
+
+          // derivatives
+          if (derBuffer)
+          {
+            unsigned int order;
+            if (oms_status_ok == getRealOutputDerivative(graph.getNodes()[output].getName(), derBuffer, order))
+            {
+              //logInfo(graph.getNodes()[output].getName() + " -> " + graph.getNodes()[input].getName() + ": " + std::to_string(derBuffer[0]));
+              if (oms_status_ok != setRealInputDerivative(graph.getNodes()[input].getName(), derBuffer, order)) return oms_status_error;
+            }
+          }
+        }
+
+        else if (graph.getNodes()[input].getType() == oms_signal_type_integer)
+        {
+          int value = 0.0;
+          if (oms_status_ok != getInteger(graph.getNodes()[output].getName(), value)) return oms_status_error;
+          if (oms_status_ok != setInteger(graph.getNodes()[input].getName(), value)) return oms_status_error;
+        }
+        else if (graph.getNodes()[input].getType() == oms_signal_type_boolean)
+        {
+          bool value = 0.0;
+          if (oms_status_ok != getBoolean(graph.getNodes()[output].getName(), value)) return oms_status_error;
+          if (oms_status_ok != setBoolean(graph.getNodes()[input].getName(), value)) return oms_status_error;
+        }
+        else
+          return logError_InternalError;
+      }
+
+    }
+    else
+    {
+      if (oms_status_ok != solveAlgLoop(graph, sortedConnections[i])) return oms_status_error; // This loop will only connect FMUs that cant get state, and thus we can solve it.
+    }
+  }
   return oms_status_ok;
 }
 

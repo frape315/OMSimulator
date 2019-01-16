@@ -55,6 +55,7 @@ namespace oms3
     oms_fmi_kind_enu_t getKind() const {return fmiKind;}
 
     unsigned int getMaxOutputDerivativeOrder() const {return maxOutputDerivativeOrder;}
+    bool getCanGetAndSetFMUstate() const {return canGetAndSetFMUstate;}
 
   private:
     // methods to copy the object

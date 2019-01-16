@@ -62,8 +62,10 @@ namespace oms3
     oms_status_enu_t setFixedStepSize(double stepSize) {this->stepSize=stepSize; return oms_status_ok;}
     oms_status_enu_t setTolerance(double tolerance) {this->tolerance=tolerance; return oms_status_ok;}
 
-    oms_status_enu_t getInput(DirectedGraph& graph, std::vector<double>& inputVect);
-    oms_status_enu_t getOutput(DirectedGraph& graph, std::vector<double>& outputVect);
+    oms_status_enu_t getInput(DirectedGraph& graph, std::vector<double>& inputVect,std::map<ComRef, Component*> FMUcomponents);
+    oms_status_enu_t getOutput(DirectedGraph& graph, std::vector<double>& outputVect,std::map<ComRef, Component*> FMUcomponents);
+    oms_status_enu_t updateCanGetFMUs(DirectedGraph& graph,std::map<ComRef, Component*> FMUcomponents);
+    oms_status_enu_t updateCantGetFMUs(DirectedGraph& graph,std::map<ComRef, Component*> FMUcomponents);
     oms_status_enu_t updateInputs(DirectedGraph& graph);
     oms_status_enu_t solveAlgLoop(DirectedGraph& graph, const std::vector< std::pair<int, int> >& SCC);
 
