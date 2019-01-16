@@ -38,7 +38,7 @@
 #include "ssd/Tags.h"
 #include "SystemTLM.h"
 #include "Types.h"
-
+#include "math.h"
 oms3::SystemWC::SystemWC(const ComRef& cref, Model* parentModel, System* parentSystem)
   : oms3::System(cref, oms_system_wc, parentModel, parentSystem)
 {
@@ -173,63 +173,188 @@ oms_status_enu_t oms3::SystemWC::stepUntil(double stopTime, void (*cb)(const cha
 {
   CallClock callClock(clock);
   ComRef modelName = this->getModel()->getCref();
-
+  
+  fmi2_status_t fmi_status;
   double startTime=time;
 
   if (Flags::ProgressBar())
     logInfo("stepUntil [" + std::to_string(startTime) + "; " + std::to_string(stopTime) + "]");
 
-  while (time < stopTime)
+  if(oms3::Flags::VariableStep()) // If variable step.
   {
-    double tNext = time+stepSize;
-    if (tNext > stopTime)
-      tNext = stopTime;
-
-    logDebug("doStep: " + std::to_string(time) + " -> " + std::to_string(tNext));
-
-    oms_status_enu_t status;
-    for (const auto& subsystem : getSubSystems())
+    int fmuIndex = 0;
+    while (time < stopTime)
     {
-      status = subsystem.second->stepUntil(tNext, NULL);
-      if (oms_status_ok != status)
+      double tNext = time+stepSize;
+      if (tNext > stopTime)
       {
-        if (cb)
-          cb(modelName.c_str(), tNext, status);
-        return status;
-      }
-    }
+        tNext = stopTime;
+        stepSize = tNext-time;
+      }      
+      logDebug("DEBUGGING: doStep: " + std::to_string(time) + " -> " + std::to_string(tNext));
 
-    for (const auto& component : getComponents())
-    {
-      status = component.second->stepUntil(tNext);
-      if (oms_status_ok != status)
+      oms_status_enu_t status;
+      for (const auto& component : getComponents())
+      { 
+        fmi2_import_t* fmu_in;
+        fmi2_FMU_state_t s = NULL;      
+        if (oms_component_fmu == component.second->getType()) // Check that its an FMU
+        {
+          fmu_in = dynamic_cast<ComponentFMUCS*>(component.second)->getFMU();
+          s = NULL;          
+          fmi_status = fmi2_import_get_fmu_state(fmu_in,&s);
+          sVect.push_back(s);
+          fmiImportVect.push_back(fmu_in);             
+       
+          status = component.second->stepUntil(tNext);
+          if (oms_status_ok != status)
+          {
+            if (cb)
+              cb(modelName.c_str(), tNext, status);
+            return status;
+          }
+        }        
+      }
+      
+      for (const auto& subsystem : getSubSystems())
       {
-        if (cb)
-          cb(modelName.c_str(), tNext, status);
-        return status;
+        status = subsystem.second->stepUntil(tNext, NULL);
+        if (oms_status_ok != status)
+        {
+          if (cb)
+            cb(modelName.c_str(), tNext, status);
+          return status;
+        }
+      }    
+      
+      // get inputs at the end of all steps.
+      std::vector<double> inputVect;
+      std::vector<double> outputVect;      
+      if(oms_status_ok != getInput(outputsGraph,inputVect)) return oms_status_error;
+      
+      time = tNext;
+      if (isTopLevelSystem())
+        getModel()->emit(time);
+      updateInputs(outputsGraph);
+      if (isTopLevelSystem())
+        getModel()->emit(time);
+      
+      // get outputs after communication steps
+      if(oms_status_ok != getOutput(outputsGraph,outputVect)) return oms_status_error;
+      
+      if (inputVect.size() != outputVect.size()) return oms_status_error;
+      double biggestDifferance = 0.0;
+      for (int n=0; n < inputVect.size();n++)
+      {
+        double error;
+        error = inputVect[n]-outputVect[n];
+        if (error < 0) error = -error;
+        if (error > biggestDifferance) biggestDifferance = error;    
+        logDebug("DEBUGGING: Input is: " + std::to_string(inputVect[n]) + " output is: " + std::to_string(outputVect[n]));    
+        logDebug("DEBUGGING: error is: " + std::to_string(error) + " Biggest Differance is: " + std::to_string(biggestDifferance));    
       }
-    }
+      double changeTolerance = 1e-2;
+      double safety_factor = 0.90;
+      double fixRatio = safety_factor*changeTolerance/biggestDifferance;
+      logDebug("DEBUGGING: fixRatio is: " + std::to_string(fixRatio));
+      
+      if (biggestDifferance > changeTolerance) //Going to rollback.
+      {
+        //Fix fmus 
+        for (int i=0; i<fmiImportVect.size(); ++i) // Reset all FMU states
+        {
+          fmi_status = fmi2_import_set_fmu_state(fmiImportVect[i], sVect[i]);  
+        }  
+        //Fix time
+        time = tNext-stepSize;
+        for (const auto& component : getComponents())
+        {   
+          if (oms_component_fmu == component.second->getType())
+          { 
+            dynamic_cast<ComponentFMUCS*>(component.second)->setFmuTime(time);
+          }
+        }
+        //Fix Steptime.
+        stepSize = stepSize*pow(fixRatio,0.25);        
+        logDebug("DEBUGGING: rollbacking, new h: " + std::to_string(stepSize));
+      }
+      else // Not going to rollback.
+      {
+        if (safety_factor*changeTolerance/biggestDifferance > 1)
+        {
+          stepSize = stepSize*pow(fixRatio,0.25);        
+          logDebug("DEBUGGING: Not rollbacking, new h: " + std::to_string(stepSize));
+        }
+        else
+          logDebug("DEBUGGING: Not rollbacking, keeping old h: " + std::to_string(stepSize));          
+      }   
+      
+      if (cb)
+        cb(modelName.c_str(), time, oms_status_ok);
 
-    time = tNext;
-    if (isTopLevelSystem())
-      getModel()->emit(time);
-    updateInputs(outputsGraph);
-    if (isTopLevelSystem())
-      getModel()->emit(time);
+      if (Flags::ProgressBar())
+        Log::ProgressBar(startTime, stopTime, time);
 
-    if (cb)
-      cb(modelName.c_str(), time, oms_status_ok);
-
-    if (Flags::ProgressBar())
-      Log::ProgressBar(startTime, stopTime, time);
-
-    if (isTopLevelSystem() && getModel()->cancelSimulation())
-    {
-      cb(modelName.c_str(), time, oms_status_discard);
-      return oms_status_discard;
+      if (isTopLevelSystem() && getModel()->cancelSimulation())
+      {
+        cb(modelName.c_str(), time, oms_status_discard);
+        return oms_status_discard;
+      }
     }
   }
+  else // If fixed step.
+  {
+    while (time < stopTime)
+    {
+      double tNext = time+stepSize;
+      if (tNext > stopTime)
+        tNext = stopTime;
 
+      logDebug("doStep: " + std::to_string(time) + " -> " + std::to_string(tNext));
+
+      oms_status_enu_t status;
+      for (const auto& subsystem : getSubSystems())
+      {
+        status = subsystem.second->stepUntil(tNext, NULL);
+        if (oms_status_ok != status)
+        {
+          if (cb)
+            cb(modelName.c_str(), tNext, status);
+          return status;
+        }
+      }
+
+      for (const auto& component : getComponents())
+      {
+        status = component.second->stepUntil(tNext);
+        if (oms_status_ok != status)
+        {
+          if (cb)
+            cb(modelName.c_str(), tNext, status);
+          return status;
+        }
+      }
+
+      time = tNext;
+      if (isTopLevelSystem())
+        getModel()->emit(time);
+      updateInputs(outputsGraph);
+      if (isTopLevelSystem())
+        getModel()->emit(time);
+
+      if (cb)
+        cb(modelName.c_str(), time, oms_status_ok);
+
+      if (Flags::ProgressBar())
+        Log::ProgressBar(startTime, stopTime, time);
+
+      if (isTopLevelSystem() && getModel()->cancelSimulation())
+      {
+        cb(modelName.c_str(), time, oms_status_discard);
+        return oms_status_discard;
+      }
+    }
+  }
   if (Flags::ProgressBar())
   {
     Log::ProgressBar(startTime, stopTime, time);
@@ -294,6 +419,42 @@ oms_status_enu_t oms3::SystemWC::setRealInputDerivative(const ComRef& cref, doub
   }
 
   return oms_status_error;
+}
+
+
+    
+oms_status_enu_t oms3::SystemWC::getInput(oms3::DirectedGraph& graph, std::vector<double>& inputVect)
+{
+  const std::vector< std::vector< std::pair<int, int> > >& sortedConnections = graph.getSortedConnections();
+  inputVect.clear();
+  for(int i=0; i<sortedConnections.size(); i++)
+  {    
+    int input = sortedConnections[i][0].second;
+    if (graph.getNodes()[input].getType() == oms_signal_type_real)        
+    {
+      double inValue = 0.0;
+      if (oms_status_ok != getReal(graph.getNodes()[input].getName(), inValue)) return oms_status_error;        
+      inputVect.push_back(inValue);
+    }
+  } 
+  return oms_status_ok;
+}
+
+oms_status_enu_t oms3::SystemWC::getOutput(oms3::DirectedGraph& graph, std::vector<double>& outputVect)
+{
+  const std::vector< std::vector< std::pair<int, int> > >& sortedConnections = graph.getSortedConnections();
+  outputVect.clear();
+  for(int i=0; i<sortedConnections.size(); i++)
+  {    
+    int output = sortedConnections[i][0].second;
+    if (graph.getNodes()[output].getType() == oms_signal_type_real)        
+    {
+      double outValue = 0.0;
+      if (oms_status_ok != getReal(graph.getNodes()[output].getName(), outValue)) return oms_status_error;        
+      outputVect.push_back(outValue);
+    }
+  } 
+  return oms_status_ok;
 }
 
 oms_status_enu_t oms3::SystemWC::updateInputs(oms3::DirectedGraph& graph)

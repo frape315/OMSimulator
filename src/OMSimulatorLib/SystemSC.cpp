@@ -522,8 +522,8 @@ oms_status_enu_t oms3::SystemSC::stepUntil(double stopTime, void (*cb)(const cha
       // adjust final step size
       tnext = stopTime;
       hcur = tnext - tlast;
-    }
-
+    }    
+    
     // integrate using specified solver
     if (oms_solver_explicit_euler == solverMethod)
     {

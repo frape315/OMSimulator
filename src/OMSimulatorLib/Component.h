@@ -87,7 +87,6 @@ namespace oms3
     virtual oms_status_enu_t reset() = 0;
     virtual oms_status_enu_t stepUntil(double stopTime) {return oms_status_ok;}
 
-
     const DirectedGraph& getInitialUnknownsGraph() {return initialUnknownsGraph;}
     const DirectedGraph& getOutputsGraph() {return outputsGraph;}
 

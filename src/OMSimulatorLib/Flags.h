@@ -59,6 +59,7 @@ namespace oms3
     static bool InputDerivatives() {return GetInstance().inputDerivatives;}
     static bool ProgressBar() {return GetInstance().progressBar;}
     static bool SuppressPath() {return GetInstance().suppressPath;}
+    static bool VariableStep() {return GetInstance().variableStep;}
     static double StartTime() {return GetInstance().startTime;}
     static double StopTime() {return GetInstance().stopTime;}
     static double Timeout() {return GetInstance().timeout;}
@@ -75,6 +76,7 @@ namespace oms3
     bool progressBar = false;
     bool inputDerivatives = false;
     bool defaultModeIsCS = false;
+    bool variableStep = false;
     unsigned int intervals = 100;
     double startTime = 0.0;
     double stopTime = 1.0;
@@ -149,6 +151,7 @@ namespace oms3
     static oms_status_enu_t Tolerance(const std::string& value);
     static oms_status_enu_t Version(const std::string& value);
     static oms_status_enu_t WorkingDir(const std::string& value);
+    static oms_status_enu_t VariableStep(const std::string& value);
   };
 }
 
