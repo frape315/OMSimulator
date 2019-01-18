@@ -584,8 +584,8 @@ oms_status_enu_t oms3::Model::registerSignalsForResultFile()
   clock_id = resultFile->addSignal("$wallTime", "wall-clock time [s]", SignalType_REAL);
   if(oms3::Flags::VariableStep()) 
   {
-    h_id = resultFile->addSignal("h","Step-time h [s]",SignalType_INT);
-    roll_iter_id = resultFile->addSignal("rollbackIterations","How many Rollbacks were made",SignalType_REAL);
+    h_id = resultFile->addSignal("h","Step-time h [s]",SignalType_REAL);
+    roll_iter_id = resultFile->addSignal("rollbackIterations","How many Rollbacks were made",SignalType_INT);
   }
   if (system)
     if (oms_status_ok != system->registerSignalsForResultFile(*resultFile))
@@ -621,10 +621,10 @@ oms_status_enu_t oms3::Model::emit(double time, bool force)
   return oms_status_ok;
 }
 
-oms_status_enu_t oms3::Model::setStepAndRollIterator(double stepSize,unsigned int rollBackIt)
+oms_status_enu_t oms3::Model::setStepAndRollIterator(double stepSizeIn,unsigned int rollBackItIn)
 {
-  this->stepSize = stepSize;
-  this->rollBackIt = rollBackIt;
+  this->stepSize = stepSizeIn;
+  this->rollBackIt = rollBackItIn;
   return oms_status_ok;
 }
 

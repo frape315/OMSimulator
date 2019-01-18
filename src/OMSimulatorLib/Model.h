@@ -132,8 +132,8 @@ namespace oms3
     unsigned int clock_id;
     unsigned int h_id;
     unsigned int roll_iter_id;
-    double stepSize;
-    unsigned int rollBackIt;
+    double stepSize = 0.0;
+    unsigned int rollBackIt = 0;
 
     bool cancelSim;
   };
