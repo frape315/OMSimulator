@@ -206,7 +206,7 @@ oms_status_enu_t oms3::SystemWC::stepUntil(double stopTime, void (*cb)(const cha
         nominalInput.clear();
         nominalOutput.clear();
         firstTime = false;
-        for (const auto& component : getComponents()) // Collect all FMUs in maps
+        for (const auto& component : getComponents()) // Map the FMUs.
         {
           if (oms_component_fmu == component.second->getType()) // Check that its an FMU
           {
@@ -223,11 +223,14 @@ oms_status_enu_t oms3::SystemWC::stepUntil(double stopTime, void (*cb)(const cha
           {
             noneFMUcomponents.insert(std::pair<ComRef, Component*>(component.first,component.second));
           }
-        }
+        }        
+        logDebug("DEBUGGING: canGetAndSetStateFMUcomponents is size: "+std::to_string(canGetAndSetStateFMUcomponents.size()));
+        logDebug("DEBUGGING: FMUcomponents is size:"+std::to_string(FMUcomponents.size()));
+        logDebug("DEBUGGING: noneFMUcomponents is size:"+std::to_string(noneFMUcomponents.size()));
         if(canGetAndSetStateFMUcomponents.size() == 0) {logError("If no FMUs can get/set states, Variable Step solver can't be used."); return oms_status_error;}
 
         const std::vector< std::vector< std::pair<int, int> > >& sortedConnections = outputsGraph.getSortedConnections();
-        for(int i=0; i<sortedConnections.size(); i++) // Collect all nominal values for use later in simulation.
+        for(int i=0; i<sortedConnections.size(); i++) // Extract nominal values for input and output variables, and put into vectors.
         {
           if (sortedConnections[i].size() == 1)
           {
@@ -249,55 +252,42 @@ oms_status_enu_t oms3::SystemWC::stepUntil(double stopTime, void (*cb)(const cha
                 logDebug("DEBUGGING: We have found a connection with 2 FMUs thats good, lets get nominals.");
                 if (outputsGraph.getNodes()[input].getType() == oms_signal_type_real)
                 {
-                  logDebug("DEBUGGING: Input is real, lets go.");
-                  double inValue = 0.0;
-                  if (oms_status_ok != getReal(outputsGraph.getNodes()[input].getName(), inValue)) return oms_status_error;          
-                  logDebug("DEBUGGING: We just got real, do we need to?.");          
                   fmi2_import_variable_list_t *varList = fmi2_import_get_variable_list(dynamic_cast<ComponentFMUCS*>(inIterator->second)->getFMU(), 0);
-                  logDebug("DEBUGGING: We just got varList");          
                   size_t varListSize = fmi2_import_get_variable_list_size(varList);
-                  logDebug("DEBUGGING: Starting for loop");          
+                  logDebug("DEBUGGING: Starting for loop with varListSize: "+std::to_string(varListSize));          
                   for (int n = 0; n < varListSize; n++)
                   {
                     fmi2_import_variable_t* var = fmi2_import_get_variable(varList, n);
-                    logDebug("DEBUGGING: Checking if it corresponds.");
                     logDebug(outputsGraph.getNodes()[input].getName());
-                    logDebug("DEBUGGING: var name is: "+std::string(fmi2_import_get_variable_name(var)));
-                    if (inputName == std::string(fmi2_import_get_variable_name(var)) || outputName == std::string(fmi2_import_get_variable_name(var)))
+                    logDebug("DEBUGGING: outputName is "+std::string(outputName)+" inputName is "+std::string(inputName)+" and var name is "+std::string(fmi2_import_get_variable_name(var)));  
+                    if (inputName == std::string(fmi2_import_get_variable_name(var))) 
                     {
-                      logDebug("DEBUGGING: Found a real nominal that corresponds.");     
+                      logDebug("DEBUGGING: saving this nominal input.");  
                       fmi2_import_real_variable_t* varReal = fmi2_import_get_variable_as_real(var);
                       double nominal = fmi2_import_get_real_variable_nominal(varReal);
                       nominalInput.push_back(nominal);                        
                     }                      
                   }
-                  logDebug("DEBUGGING: We have looped through inputs. Lets clear varlist. ");
                   fmi2_import_free_variable_list(varList);               
-                  logDebug("DEBUGGING: Varlist clear.");                
-                }                
-                
+                }            
                 if (outputsGraph.getNodes()[output].getType() == oms_signal_type_real)
                 {
-                  logDebug("DEBUGGING: Output is real, lets go.");
-                  double outValue = 0.0;
-                  if (oms_status_ok != getReal(outputsGraph.getNodes()[output].getName(), outValue)) return oms_status_error;   
-                  logDebug("DEBUGGING: We just got real, do we need to?.");                           
                   fmi2_import_variable_list_t *varList = fmi2_import_get_variable_list(dynamic_cast<ComponentFMUCS*>(outIterator->second)->getFMU(), 0);
                   size_t varListSize = fmi2_import_get_variable_list_size(varList);
-                  logDebug("DEBUGGING: Starting for loop");     
+                  logDebug("DEBUGGING: Starting for loop with varListSize: "+std::to_string(varListSize));     
                   for (int n = 0; n < varListSize; n++)
                   {
                     fmi2_import_variable_t* var = fmi2_import_get_variable(varList, n);
-                    if (inputName == std::string(fmi2_import_get_variable_name(var)) || outputName == std::string(fmi2_import_get_variable_name(var)))
-                    {
+                    logDebug("DEBUGGING: outputName is "+std::string(outputName)+" inputName is "+std::string(inputName)+" and var name is "+std::string(fmi2_import_get_variable_name(var)));   
+                    if (outputName == std::string(fmi2_import_get_variable_name(var)))
+                    {  
+                      logDebug("DEBUGGING: saving this nominal output.");
                       fmi2_import_real_variable_t* varReal = fmi2_import_get_variable_as_real(var);
                       double nominal = fmi2_import_get_real_variable_nominal(varReal);
                       nominalOutput.push_back(nominal);                                           
                     }                      
                   }
-                  logDebug("DEBUGGING: We have looped through outputs. Lets clear varlist. ");
-                  fmi2_import_free_variable_list(varList);               
-                  logDebug("DEBUGGING: Varlist clear.");
+                  fmi2_import_free_variable_list(varList);   
                 }
                 
               }
@@ -327,6 +317,7 @@ oms_status_enu_t oms3::SystemWC::stepUntil(double stopTime, void (*cb)(const cha
           return status;
         }
       }
+      
       for (const auto& component : noneFMUcomponents) // stepUntil for noneFmus
       {
         status = component.second->stepUntil(tNext);
@@ -337,6 +328,7 @@ oms_status_enu_t oms3::SystemWC::stepUntil(double stopTime, void (*cb)(const cha
           return status;
         }
       }
+      
       for (const auto& subsystem : getSubSystems()) // stepUntill for subsystems of ME FMUs, TODO: Fix rollback here too.
       {
         status = subsystem.second->stepUntil(tNext, NULL);
@@ -348,6 +340,7 @@ oms_status_enu_t oms3::SystemWC::stepUntil(double stopTime, void (*cb)(const cha
         }
       }
 
+      logDebug("DEBUGGING: Doing error control");
       // get inputs and outputs at the end of all steps.
       std::vector<double> inputVect;
       std::vector<double> outputVect;
@@ -375,6 +368,10 @@ oms_status_enu_t oms3::SystemWC::stepUntil(double stopTime, void (*cb)(const cha
       if(oms_status_ok != getOutput(outputsGraph,outputVect,FMUcomponents)) return oms_status_error;*/
       
       logDebug("DEBUGGING: Lets do Error control");
+      logDebug("DEBUGGING: inputVect is size: "+std::to_string(inputVect.size()));
+      logDebug("DEBUGGING: outputVect is size:"+std::to_string(outputVect.size()));
+      logDebug("DEBUGGING: nominalInput is size:"+std::to_string(nominalInput.size()));
+      logDebug("DEBUGGING: nominalOutput is size:"+std::to_string(nominalOutput.size()));
       if (inputVect.size() != outputVect.size() || inputVect.size() != nominalInput.size() || nominalOutput.size() != nominalInput.size()) return oms_status_error;
 
       double biggestDifferance = 0.0;
@@ -385,8 +382,10 @@ oms_status_enu_t oms3::SystemWC::stepUntil(double stopTime, void (*cb)(const cha
         double error;
         double nominal;
         bool hack_error = false;        
+        logDebug("DEBUGGING: Getting nominal Value");
         if (nominalInput[n] == nominalOutput[n])
         {
+          logDebug("DEBUGGING: Both nominal match.");
           nominal = nominalInput[n];
         }
         else if (nominalInput[n] == 1.0)
@@ -418,6 +417,8 @@ oms_status_enu_t oms3::SystemWC::stepUntil(double stopTime, void (*cb)(const cha
               biggestDifferance = error;
               logDebug("DEBUGGING: error is: " + std::to_string(error) + " New Biggest Differance is: " + std::to_string(biggestDifferance));
             }
+            else              
+              logDebug("DEBUGGING: error is smaller than biggestDifferance, not chaning it.");
           }
         }
         else
@@ -650,17 +651,17 @@ oms_status_enu_t oms3::SystemWC::getInputAndOutput(oms3::DirectedGraph& graph, s
           {
             if (graph.getNodes()[input].getType() == oms_signal_type_real)
             {
-              logDebug("DEBUGGING: found a real input");
               double inValue = 0.0;
-              if (oms_status_ok != getReal(graph.getNodes()[input].getName(), inValue)) return oms_status_error;
+              if (oms_status_ok != getReal(graph.getNodes()[input].getName(), inValue)) return oms_status_error;           
+              logDebug("DEBUGGING: found a real input called: "+std::string(graph.getNodes()[output].getName()));
               inputVect.push_back(inValue);
               inCount++;
             }
             if (graph.getNodes()[output].getType() == oms_signal_type_real)
             {
-              logDebug("DEBUGGING: found a real output");
               double outValue = 0.0;
-              if (oms_status_ok != getReal(graph.getNodes()[output].getName(), outValue)) return oms_status_error;
+              if (oms_status_ok != getReal(graph.getNodes()[output].getName(), outValue)) return oms_status_error;              
+              logDebug("DEBUGGING: found a real output called: "+std::string(graph.getNodes()[output].getName()));
               outputVect.push_back(outValue);    
               outCount++;
             }
